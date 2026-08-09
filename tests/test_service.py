@@ -87,6 +87,6 @@ def test_add_document_duplicate_does_not_overwrite_pdf(service, sample_pdf, tmp_
 def test_ask_portuguese_uses_pt_prompt(service):
     result = service.ask("qual é o chunk?", language="pt")
     assert result.answer == "resposta final [1]"
-    # segunda chamada ao Groq é a geração; system prompt deve ser o PT
+    # the second Groq call is the generation; its system prompt must be the PT one
     generation_call = service.chat._client.calls[1]
     assert "Responda em português." in generation_call["messages"][0]["content"]
