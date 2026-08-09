@@ -1,4 +1,5 @@
 import pytest
+import threading
 
 from rag.feedback.db import FeedbackDB
 
@@ -50,3 +51,27 @@ def test_top_documents(db):
     _log(db)
     m = db.metrics()
     assert m["top_documents"][0] == {"doc_title": "Paper A", "citations": 2}
+
+
+def test_concurrent_writes_are_safe(db):
+    num_threads = 8
+    calls_per_thread = 5
+    interaction_ids = []
+    lock = threading.Lock()
+
+    def worker():
+        for _ in range(calls_per_thread):
+            interaction_id = _log(db)
+            with lock:
+                interaction_ids.append(interaction_id)
+
+    threads = [threading.Thread(target=worker) for _ in range(num_threads)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    m = db.metrics()
+    assert m["total_questions"] == num_threads * calls_per_thread
+    assert len(interaction_ids) == num_threads * calls_per_thread
+    assert len(set(interaction_ids)) == num_threads * calls_per_thread
