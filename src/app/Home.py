@@ -25,13 +25,21 @@ def _render_feedback(interaction_id):
         return
     col_up, col_down, _ = st.columns([1, 1, 8])
     if col_up.button("👍", key=f"up-{interaction_id}"):
-        send_feedback(interaction_id, 1)
-        st.session_state.voted.add(interaction_id)
-        st.rerun()
+        try:
+            send_feedback(interaction_id, 1)
+        except ApiError as exc:
+            st.error(str(exc))
+        else:
+            st.session_state.voted.add(interaction_id)
+            st.rerun()
     if col_down.button("👎", key=f"down-{interaction_id}"):
-        send_feedback(interaction_id, -1)
-        st.session_state.voted.add(interaction_id)
-        st.rerun()
+        try:
+            send_feedback(interaction_id, -1)
+        except ApiError as exc:
+            st.error(str(exc))
+        else:
+            st.session_state.voted.add(interaction_id)
+            st.rerun()
 
 
 for message in st.session_state.messages:
