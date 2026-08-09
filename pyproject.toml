@@ -1,0 +1,35 @@
+[project]
+name = "ai-research-assistant"
+version = "0.1.0"
+description = "Advanced RAG research assistant (FAISS + BM25 + RRF + cross-encoder re-ranking + Groq)"
+requires-python = ">=3.11"
+dependencies = [
+  "faiss-cpu>=1.8",
+  "sentence-transformers>=3.0",
+  "rank-bm25>=0.2.2",
+  "pypdf>=4.0",
+  "groq>=0.11",
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "python-multipart>=0.0.9",
+  "streamlit>=1.35",
+  "requests>=2.31",
+  "python-dotenv>=1.0",
+  "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27", "fpdf2>=2.7"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "integration: baixa modelos reais (precisa de rede na primeira execucao)",
+]
