@@ -1,48 +1,58 @@
 # 📚 AI Research Assistant — Advanced RAG
 
-Assistente de pesquisa sobre papers clássicos de IA, construído **from scratch**
-(sem LangChain) para demonstrar técnicas avançadas de RAG:
+A research assistant over classic AI papers, built **from scratch** (no LangChain)
+to demonstrate advanced RAG techniques:
 
-- **Busca híbrida** — FAISS (semântica) + BM25 (lexical) com **Reciprocal Rank Fusion**
-- **Re-ranking** com cross-encoder (`ms-marco-MiniLM-L-6-v2`)
-- **Reescrita de query** consciente do histórico do chat (Groq, Llama 3.1 8B)
-- **Respostas com citações** `[n]` fundamentadas nos documentos (Groq, Llama 3.3 70B)
-- **Feedback 👍/👎** persistido em SQLite + dashboard de métricas
-- Upload incremental de PDFs
+- **Hybrid search** — FAISS (semantic) + BM25 (lexical) merged with **Reciprocal Rank Fusion**
+- **Re-ranking** with a cross-encoder (`ms-marco-MiniLM-L-6-v2`)
+- **History-aware query rewriting** (Groq, Llama 3.1 8B)
+- **Grounded answers with `[n]` citations** (Groq, Llama 3.3 70B)
+- **👍/👎 feedback** persisted in SQLite + a metrics dashboard
+- Incremental PDF upload
+- **Bilingual UI** — English by default, with a Português option that switches
+  the interface and the assistant's answers
 
-## Arquitetura
+## Architecture
 
-Streamlit (UI) → FastAPI (API) → núcleo RAG (biblioteca Python pura, testável isoladamente).
+Streamlit (UI) → FastAPI (API) → RAG core (pure Python library, independently testable).
 
 ## Setup
 
 ```bash
 python -m venv .venv && .venv\Scripts\activate   # Windows
 pip install -e ".[dev]"
-copy .env.example .env                            # colocar sua GROQ_API_KEY
+copy .env.example .env                            # add your GROQ_API_KEY
 
-python scripts/download_papers.py                 # baixa 5 papers clássicos do arXiv
-python scripts/build_index.py                     # constrói FAISS + BM25
+python scripts/download_papers.py                 # downloads 5 classic arXiv papers
+python scripts/build_index.py                     # builds FAISS + BM25
 ```
 
-## Rodando
+## Running
 
 ```bash
-uvicorn "api.main:create_app" --factory           # API em http://localhost:8000 (docs em /docs)
-streamlit run src/app/Home.py                     # UI em http://localhost:8501
+uvicorn "api.main:create_app" --factory           # API at http://localhost:8000 (docs at /docs)
+streamlit run src/app/Home.py                     # UI at http://localhost:8501
 ```
 
-## Testes
+## Tests
 
 ```bash
-pytest -m "not integration"    # suíte offline (LLM sempre mockado)
-pytest -m integration          # retrieval real (baixa modelos na 1ª vez)
+pytest -m "not integration"    # offline suite (LLM always mocked)
+pytest -m integration          # real retrieval (downloads models on first run)
 ```
 
-## Como funciona uma pergunta
+## How a question flows
 
-1. A pergunta + histórico são reescritos em uma query de busca autocontida.
-2. A query roda em FAISS (top-20) e BM25 (top-20); RRF funde os rankings.
-3. O cross-encoder re-ranqueia os candidatos; sobram os top-5 chunks.
-4. O LLM responde **apenas** com base nos chunks, citando `[n]` (doc + página).
-5. A interação é registrada; o feedback do usuário alimenta o dashboard.
+1. The question + chat history are rewritten into a self-contained search query
+   (always in English — the corpus is English).
+2. The query runs through FAISS (top-20) and BM25 (top-20); RRF fuses the rankings.
+3. A cross-encoder re-ranks the candidates; the top-5 chunks survive.
+4. The LLM answers **only** from those chunks, citing `[n]` (document + page),
+   in the language selected in the UI.
+5. The interaction is logged; user feedback feeds the dashboard.
+
+## Notes
+
+- BM25 uses the **BM25L** variant: classic BM25Okapi zeroes the IDF of terms that
+  appear in half or more of a small corpus, silently dropping valid lexical
+  matches. BM25L smooths the IDF while keeping non-matching documents at score 0.

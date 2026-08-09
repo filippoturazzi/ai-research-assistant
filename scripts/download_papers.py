@@ -1,4 +1,4 @@
-"""Baixa os papers clássicos de IA (arXiv) usados como coleção padrão."""
+"""Downloads the classic AI papers (arXiv) used as the default collection."""
 from pathlib import Path
 
 import requests
@@ -19,13 +19,13 @@ def main() -> None:
     for name, url in PAPERS.items():
         path = DEST / f"{name}.pdf"
         if path.exists():
-            print(f"[skip] {name} (já existe)")
+            print(f"[skip] {name} (already exists)")
             continue
-        print(f"[baixando] {name} ...")
+        print(f"[downloading] {name} ...")
         response = requests.get(url, timeout=120)
         response.raise_for_status()
         path.write_bytes(response.content)
-    print("Concluído.")
+    print("Done.")
 
 
 if __name__ == "__main__":
