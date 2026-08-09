@@ -1,11 +1,16 @@
 import streamlit as st
 
-from app.api_client import ApiError, metrics
+from app.api_client import ApiConnectionError, ApiError, metrics
+from app.translations import language_selector, t
 
-st.title("📊 Métricas")
+lang = language_selector()
+st.title(t("metrics_title", lang))
 
 try:
     data = metrics()
+except ApiConnectionError:
+    st.error(t("api_unreachable", lang))
+    st.stop()
 except ApiError as exc:
     st.error(str(exc))
     st.stop()
@@ -16,20 +21,20 @@ def _pct(value):
 
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Perguntas", data["total_questions"])
-col2.metric("Aprovação", _pct(data["approval_rate"]))
-col3.metric("Aprovação (7d)", _pct(data["approval_rate_7d"]))
-col4.metric("Latência média",
+col1.metric(t("m_questions", lang), data["total_questions"])
+col2.metric(t("m_approval", lang), _pct(data["approval_rate"]))
+col3.metric(t("m_approval_7d", lang), _pct(data["approval_rate_7d"]))
+col4.metric(t("m_latency", lang),
             f"{data['avg_latency_ms']:.0f} ms" if data["avg_latency_ms"] else "—")
 
-st.subheader("Perguntas com 👎 (fila de investigação)")
+st.subheader(t("negatives_title", lang))
 if not data["negatives"]:
-    st.caption("Nenhum feedback negativo. 🎉")
+    st.caption(t("no_negatives", lang))
 for item in data["negatives"]:
     with st.expander(f"{item['created_at']} — {item['query']}"):
         st.markdown(item["answer"])
         st.json(item["sources"])
 
-st.subheader("Documentos mais citados")
+st.subheader(t("top_docs", lang))
 for doc in data["top_documents"]:
-    st.markdown(f"- **{doc['doc_title']}** — {doc['citations']} citações")
+    st.markdown(f"- **{doc['doc_title']}** — {doc['citations']} {t('citations', lang)}")

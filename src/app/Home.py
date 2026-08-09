@@ -1,32 +1,39 @@
 import streamlit as st
 
-from app.api_client import ApiError, ask, send_feedback
+from app.api_client import ApiConnectionError, ApiError, ask, send_feedback
+from app.translations import language_selector, t
 
 st.set_page_config(page_title="AI Research Assistant", page_icon="📚", layout="wide")
-st.title("📚 AI Research Assistant")
-st.caption("Pergunte sobre os papers indexados — respostas com citações [n].")
+lang = language_selector()
+st.title("📚 " + t("page_title", lang))
+st.caption(t("tagline", lang))
 
 if "messages" not in st.session_state:
-    st.session_state.messages = []  # {"role", "content", "sources"?, "interaction_id"?}
+    st.session_state.messages = []
 if "voted" not in st.session_state:
     st.session_state.voted = set()
 
 
 def _render_sources(sources):
-    with st.expander(f"📄 Fontes ({len(sources)})"):
+    with st.expander(t("sources", lang).format(n=len(sources))):
         for i, s in enumerate(sources, start=1):
-            st.markdown(f"**[{i}] {s['doc_title']}** — p. {s['page']} (score {s['score']:.2f})")
+            st.markdown(
+                f"**[{i}] {s['doc_title']}** — {t('page_abbrev', lang)} {s['page']} "
+                f"({t('score', lang)} {s['score']:.2f})"
+            )
             st.text(s["text"][:500])
 
 
 def _render_feedback(interaction_id):
     if interaction_id in st.session_state.voted:
-        st.caption("Obrigado pelo feedback!")
+        st.caption(t("feedback_thanks", lang))
         return
     col_up, col_down, _ = st.columns([1, 1, 8])
     if col_up.button("👍", key=f"up-{interaction_id}"):
         try:
             send_feedback(interaction_id, 1)
+        except ApiConnectionError:
+            st.error(t("api_unreachable", lang))
         except ApiError as exc:
             st.error(str(exc))
         else:
@@ -35,6 +42,8 @@ def _render_feedback(interaction_id):
     if col_down.button("👎", key=f"down-{interaction_id}"):
         try:
             send_feedback(interaction_id, -1)
+        except ApiConnectionError:
+            st.error(t("api_unreachable", lang))
         except ApiError as exc:
             st.error(str(exc))
         else:
@@ -50,7 +59,7 @@ for message in st.session_state.messages:
         if message.get("interaction_id"):
             _render_feedback(message["interaction_id"])
 
-if question := st.chat_input("Faça uma pergunta sobre os documentos..."):
+if question := st.chat_input(t("chat_placeholder", lang)):
     st.session_state.messages.append({"role": "user", "content": question})
     with st.chat_message("user"):
         st.markdown(question)
@@ -58,10 +67,12 @@ if question := st.chat_input("Faça uma pergunta sobre os documentos..."):
         history = [{"role": m["role"], "content": m["content"]}
                    for m in st.session_state.messages[:-1]][-6:]
         try:
-            with st.spinner("Buscando nos documentos..."):
-                result = ask(question, history)
+            with st.spinner(t("searching", lang)):
+                result = ask(question, history, lang)
+        except ApiConnectionError:
+            st.error(t("api_unreachable", lang))
         except ApiError as exc:
-            st.error(f"Não consegui responder agora: {exc}")
+            st.error(f"{t('ask_failed', lang)} {exc}")
         else:
             st.markdown(result["answer"])
             _render_sources(result["sources"])

@@ -10,6 +10,10 @@ class ApiError(Exception):
     pass
 
 
+class ApiConnectionError(ApiError):
+    pass
+
+
 def _handle(response: requests.Response) -> dict | list:
     if response.status_code >= 400:
         try:
@@ -24,15 +28,16 @@ def _request(method: str, url: str, **kwargs) -> dict | list:
     try:
         response = requests.request(method, url, timeout=_TIMEOUT, **kwargs)
     except requests.exceptions.RequestException as exc:
-        raise ApiError(
-            f"Não consegui falar com a API — ela está rodando? ({exc.__class__.__name__})"
+        raise ApiConnectionError(
+            f"Could not reach the API — is it running? ({exc.__class__.__name__})"
         ) from exc
     return _handle(response)
 
 
-def ask(question: str, history: list[dict]) -> dict:
+def ask(question: str, history: list[dict], language: str = "en") -> dict:
     return _request("POST", f"{API_URL}/ask",
-                     json={"question": question, "history": history})
+                     json={"question": question, "history": history,
+                           "language": language})
 
 
 def upload(filename: str, data: bytes) -> dict:
