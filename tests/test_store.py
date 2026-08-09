@@ -1,0 +1,39 @@
+import numpy as np
+import pytest
+
+from rag.errors import IndexNotFoundError
+from rag.models import Chunk
+from rag.retrieval.store import IndexStore
+
+
+def _chunk(doc, i, text):
+    return Chunk(chunk_id=f"{doc}:{i}", doc_id=doc, doc_title=doc.title(), page=1, position=i, text=text)
+
+
+def _vecs(n):
+    out = np.eye(4, dtype="float32")[:n]
+    return out
+
+
+def test_add_keeps_positions_aligned():
+    store = IndexStore(dim=4)
+    store.add([_chunk("a", 0, "cats"), _chunk("b", 0, "faiss index")], _vecs(2))
+    assert store.vectors.size == 2
+    assert store.bm25.search("faiss", k=1)[0][0] == 1
+    assert store.doc_ids() == {"a", "b"}
+
+
+def test_save_load_roundtrip(tmp_path):
+    store = IndexStore(dim=4)
+    store.add([_chunk("a", 0, "hello world")], _vecs(1))
+    store.save(tmp_path)
+    loaded = IndexStore.load(tmp_path)
+    assert len(loaded.chunks) == 1
+    assert loaded.chunks[0].text == "hello world"
+    assert loaded.vectors.size == 1
+    assert loaded.bm25.search("hello", k=1)[0][0] == 0
+
+
+def test_load_missing_raises(tmp_path):
+    with pytest.raises(IndexNotFoundError):
+        IndexStore.load(tmp_path / "nope")
