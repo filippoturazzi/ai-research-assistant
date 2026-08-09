@@ -60,7 +60,10 @@ class RAGService:
 
     def add_document(self, pdf_bytes: bytes, filename: str) -> int:
         self.documents_dir.mkdir(parents=True, exist_ok=True)
-        path = self.documents_dir / filename
+        safe_name = Path(filename).name
+        if not safe_name or safe_name in {".", ".."}:
+            raise ValueError("Nome de arquivo inválido.")
+        path = self.documents_dir / safe_name
         path.write_bytes(pdf_bytes)
         added = ingest_pdf(path, self.store, self.embedder)
         self.store.save(self.index_dir)

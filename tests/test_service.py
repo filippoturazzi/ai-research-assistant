@@ -63,3 +63,10 @@ def test_add_document_persists_index(service, sample_pdf, tmp_path):
     assert (tmp_path / "index" / "chunks.json").exists()
     assert (tmp_path / "docs" / "novo_paper.pdf").exists()
     assert any(d["doc_id"] == "novo_paper" for d in service.documents())
+
+
+def test_add_document_sanitizes_filename(service, sample_pdf, tmp_path):
+    added = service.add_document(sample_pdf.read_bytes(), "../evil.pdf")
+    assert added > 0
+    assert (tmp_path / "docs" / "evil.pdf").exists()
+    assert not (tmp_path / "evil.pdf").exists()
