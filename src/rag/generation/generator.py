@@ -4,5 +4,6 @@ from rag.generation.prompts import build_answer_messages
 from rag.models import Chunk
 
 
-def generate_answer(chat: GroqChat, question: str, chunks: list[Chunk]) -> str:
-    return chat.complete(GENERATION_MODEL, build_answer_messages(question, chunks))
+def generate_answer(chat: GroqChat, question: str, chunks: list[Chunk],
+                    language: str = "en") -> str:
+    return chat.complete(GENERATION_MODEL, build_answer_messages(question, chunks, language))
