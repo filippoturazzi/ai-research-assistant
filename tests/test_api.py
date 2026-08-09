@@ -12,7 +12,8 @@ class FakeService:
     def __init__(self):
         self.fail_generation = False
 
-    def ask(self, question, history=None):
+    def ask(self, question, history=None, language="en"):
+        self.last_language = language
         if self.fail_generation:
             raise GenerationError("down")
         return AskResult(interaction_id=1, answer="resp [1]", rewritten_query="rw",
@@ -58,6 +59,23 @@ def test_ask_generation_down_returns_503(client):
     service.fail_generation = True
     r = c.post("/ask", json={"question": "q?"})
     assert r.status_code == 503
+
+
+def test_ask_passes_language(client):
+    c, service = client
+    c.post("/ask", json={"question": "q?", "language": "pt"})
+    assert service.last_language == "pt"
+
+
+def test_ask_defaults_to_english(client):
+    c, service = client
+    c.post("/ask", json={"question": "q?"})
+    assert service.last_language == "en"
+
+
+def test_ask_rejects_unknown_language(client):
+    c, _ = client
+    assert c.post("/ask", json={"question": "q?", "language": "fr"}).status_code == 422
 
 
 def test_feedback_validates_rating(client):

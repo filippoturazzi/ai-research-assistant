@@ -38,7 +38,9 @@ def create_app(service=None) -> FastAPI:
     @app.post("/ask", response_model=AskResponse)
     def ask(body: AskRequest):
         try:
-            result = svc().ask(body.question, [m.model_dump() for m in body.history])
+            result = svc().ask(body.question,
+                               [m.model_dump() for m in body.history],
+                               language=body.language)
         except GenerationError as exc:
             raise HTTPException(status_code=503, detail=str(exc))
         return result

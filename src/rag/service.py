@@ -43,11 +43,13 @@ class RAGService:
         self.documents_dir = documents_dir
         self.retriever = HybridRetriever(store, embedder, reranker)
 
-    def ask(self, question: str, history: list[dict] | None = None) -> AskResult:
+    def ask(self, question: str, history: list[dict] | None = None,
+            language: str = "en") -> AskResult:
         start = time.perf_counter()
-        rewritten = rewrite_query(self.chat, question, history or [])
+        rewritten = rewrite_query(self.chat, question, history or [], language)
         retrieved = self.retriever.retrieve(rewritten)
-        answer = generate_answer(self.chat, question, [r.chunk for r in retrieved])
+        answer = generate_answer(self.chat, question,
+                                 [r.chunk for r in retrieved], language)
         sources = [Source(doc_title=r.chunk.doc_title, page=r.chunk.page,
                           text=r.chunk.text, score=r.score) for r in retrieved]
         latency_ms = int((time.perf_counter() - start) * 1000)

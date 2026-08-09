@@ -11,6 +11,7 @@ class HistoryMessage(BaseModel):
 class AskRequest(BaseModel):
     question: str
     history: list[HistoryMessage] = []
+    language: Literal["en", "pt"] = "en"
 
 
 class SourceOut(BaseModel):
