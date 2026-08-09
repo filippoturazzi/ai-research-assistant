@@ -102,3 +102,34 @@ def test_health_documents_metrics(client):
     assert c.get("/health").json()["documents"] == 1
     assert c.get("/documents").json()[0]["doc_id"] == "d"
     assert "total_questions" in c.get("/metrics").json()
+
+
+def test_question_too_long_rejected(client):
+    c, _ = client
+    assert c.post("/ask", json={"question": "x" * 501}).status_code == 422
+
+
+def test_question_at_limit_accepted(client):
+    c, _ = client
+    assert c.post("/ask", json={"question": "x" * 500}).status_code == 200
+
+
+def test_rate_limit_returns_429():
+    service = FakeService()
+    app = create_app(service=service, rate_limit=2, rate_window_s=60)
+    c = TestClient(app)
+    assert c.post("/ask", json={"question": "q?"}).status_code == 200
+    assert c.post("/ask", json={"question": "q?"}).status_code == 200
+    r = c.post("/ask", json={"question": "q?"})
+    assert r.status_code == 429
+    assert "Rate limit" in r.json()["detail"]
+
+
+def test_rate_limit_shared_with_upload():
+    service = FakeService()
+    app = create_app(service=service, rate_limit=2, rate_window_s=60)
+    c = TestClient(app)
+    assert c.post("/ask", json={"question": "q?"}).status_code == 200
+    pdf = ("file", ("ok.pdf", io.BytesIO(b"%PDF"), "application/pdf"))
+    assert c.post("/upload", files=[pdf]).status_code == 200
+    assert c.post("/ask", json={"question": "q?"}).status_code == 429

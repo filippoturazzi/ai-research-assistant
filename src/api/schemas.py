@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class HistoryMessage(BaseModel):
@@ -9,7 +9,7 @@ class HistoryMessage(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str
+    question: str = Field(max_length=500)
     history: list[HistoryMessage] = []
     language: Literal["en", "pt"] = "en"
 
