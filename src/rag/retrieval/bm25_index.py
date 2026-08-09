@@ -1,7 +1,7 @@
 import re
 
 import numpy as np
-from rank_bm25 import BM25Plus
+from rank_bm25 import BM25L
 
 
 def _tokenize(text: str) -> list[str]:
@@ -15,7 +15,7 @@ class BM25Index:
 
     def _rebuild(self) -> None:
         corpus = [_tokenize(t) for t in self._texts]
-        self._bm25 = BM25Plus(corpus) if corpus else None
+        self._bm25 = BM25L(corpus) if corpus else None
 
     def add(self, texts: list[str]) -> None:
         self._texts.extend(texts)
