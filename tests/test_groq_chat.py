@@ -27,3 +27,9 @@ def test_exhausted_raises_generation_error():
     fake = FakeGroq([RuntimeError("a"), RuntimeError("b"), RuntimeError("c")])
     with pytest.raises(GenerationError):
         GroqChat(client=fake).complete("m", [])
+
+
+def test_missing_api_key_raises_generation_error(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    with pytest.raises(GenerationError):
+        GroqChat()

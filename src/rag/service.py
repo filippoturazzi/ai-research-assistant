@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from rag.config import GENERATION_MODEL
+from rag.errors import DuplicateDocumentError
 from rag.feedback.db import FeedbackDB
 from rag.generation.generator import generate_answer
 from rag.generation.groq_chat import GroqChat
@@ -63,6 +64,8 @@ class RAGService:
         safe_name = Path(filename).name
         if not safe_name or safe_name in {".", ".."}:
             raise ValueError("Nome de arquivo inválido.")
+        if Path(safe_name).stem in self.store.doc_ids():
+            raise DuplicateDocumentError(f"Documento '{Path(safe_name).stem}' já está indexado.")
         path = self.documents_dir / safe_name
         path.write_bytes(pdf_bytes)
         added = ingest_pdf(path, self.store, self.embedder)

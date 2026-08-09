@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from rag.errors import DuplicateDocumentError
 from rag.feedback.db import FeedbackDB
 from rag.models import Chunk
 from rag.retrieval.store import IndexStore
@@ -70,3 +71,14 @@ def test_add_document_sanitizes_filename(service, sample_pdf, tmp_path):
     assert added > 0
     assert (tmp_path / "docs" / "evil.pdf").exists()
     assert not (tmp_path / "evil.pdf").exists()
+
+
+def test_add_document_duplicate_does_not_overwrite_pdf(service, sample_pdf, tmp_path):
+    service.add_document(sample_pdf.read_bytes(), "dup_doc.pdf")
+    stored_path = tmp_path / "docs" / "dup_doc.pdf"
+    original_bytes = stored_path.read_bytes()
+
+    with pytest.raises(DuplicateDocumentError):
+        service.add_document(b"other bytes", "dup_doc.pdf")
+
+    assert stored_path.read_bytes() == original_bytes

@@ -10,7 +10,12 @@ class GroqChat:
     def __init__(self, api_key: str | None = None, client=None):
         if client is None:
             from groq import Groq  # import tardio
-            client = Groq(api_key=api_key or os.environ["GROQ_API_KEY"])
+            key = api_key or os.environ.get("GROQ_API_KEY")
+            if not key:
+                raise GenerationError(
+                    "GROQ_API_KEY não definida — copie .env.example para .env e adicione sua chave."
+                )
+            client = Groq(api_key=key)
         self._client = client
 
     def complete(self, model: str, messages: list[dict],
