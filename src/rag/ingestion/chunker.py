@@ -13,7 +13,7 @@ def chunk_pages(
     chunk_words: int = CHUNK_WORDS,
     overlap_words: int = OVERLAP_WORDS,
 ) -> list[Chunk]:
-    # unidades (página, parágrafo); parágrafos maiores que o limite são fatiados
+    # units (page, paragraph); paragraphs larger than the limit are sliced
     units: list[tuple[int, str]] = []
     for page, text in pages:
         for para in _split_paragraphs(text):

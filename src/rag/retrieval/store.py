@@ -43,7 +43,7 @@ class IndexStore:
         faiss_path = dir / "index.faiss"
         if not chunks_path.exists() or not faiss_path.exists():
             raise IndexNotFoundError(
-                f"Índice não encontrado em '{dir}'. Rode: python scripts/build_index.py"
+                f"Index not found in '{dir}'. Run: python scripts/build_index.py"
             )
         store = cls()
         store.chunks = [Chunk(**d) for d in json.loads(chunks_path.read_text(encoding="utf-8"))]

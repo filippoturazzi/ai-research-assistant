@@ -13,7 +13,7 @@ def _title_from_stem(stem: str) -> str:
 def ingest_pdf(path: Path, store, embedder) -> int:
     doc_id = path.stem
     if doc_id in store.doc_ids():
-        raise DuplicateDocumentError(f"Documento '{doc_id}' já está indexado.")
+        raise DuplicateDocumentError(f"Document '{doc_id}' is already indexed.")
     pages = extract_pages(path)
     chunks = chunk_pages(pages, doc_id=doc_id, doc_title=_title_from_stem(doc_id))
     if not chunks:

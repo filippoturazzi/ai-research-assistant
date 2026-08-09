@@ -63,9 +63,9 @@ class RAGService:
         self.documents_dir.mkdir(parents=True, exist_ok=True)
         safe_name = Path(filename).name
         if not safe_name or safe_name in {".", ".."}:
-            raise ValueError("Nome de arquivo inválido.")
+            raise ValueError("Invalid file name.")
         if Path(safe_name).stem in self.store.doc_ids():
-            raise DuplicateDocumentError(f"Documento '{Path(safe_name).stem}' já está indexado.")
+            raise DuplicateDocumentError(f"Document '{Path(safe_name).stem}' is already indexed.")
         path = self.documents_dir / safe_name
         path.write_bytes(pdf_bytes)
         added = ingest_pdf(path, self.store, self.embedder)

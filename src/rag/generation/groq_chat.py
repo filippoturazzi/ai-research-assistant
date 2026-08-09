@@ -13,7 +13,7 @@ class GroqChat:
             key = api_key or os.environ.get("GROQ_API_KEY")
             if not key:
                 raise GenerationError(
-                    "GROQ_API_KEY não definida — copie .env.example para .env e adicione sua chave."
+                    "GROQ_API_KEY is not set — copy .env.example to .env and add your key."
                 )
             client = Groq(api_key=key)
         self._client = client
@@ -30,7 +30,7 @@ class GroqChat:
                 return response.choices[0].message.content
             except Exception as exc:
                 if attempt == _MAX_ATTEMPTS - 1:
-                    raise GenerationError(f"LLM indisponível: {exc}") from exc
+                    raise GenerationError(f"LLM unavailable: {exc}") from exc
                 time.sleep(delay)
                 delay *= 2
         raise GenerationError("unreachable")

@@ -1,14 +1,14 @@
 class ExtractionError(Exception):
-    """PDF sem texto extraível ou corrompido."""
+    """PDF without extractable text, or corrupted."""
 
 
 class GenerationError(Exception):
-    """Falha ao chamar o LLM após esgotar as tentativas."""
+    """LLM call failed after exhausting retries."""
 
 
 class IndexNotFoundError(Exception):
-    """Índice ausente em disco — rodar scripts/build_index.py."""
+    """Index missing on disk — run scripts/build_index.py."""
 
 
 class DuplicateDocumentError(Exception):
-    """Documento com mesmo doc_id já indexado."""
+    """A document with the same doc_id is already indexed."""

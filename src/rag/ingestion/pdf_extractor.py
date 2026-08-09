@@ -16,7 +16,7 @@ def extract_pages(path: Path) -> list[tuple[int, str]]:
     except ExtractionError:
         raise
     except Exception as exc:
-        raise ExtractionError(f"Não consegui ler o PDF '{path.name}': {exc}") from exc
+        raise ExtractionError(f"Could not read the PDF '{path.name}': {exc}") from exc
     if not pages:
-        raise ExtractionError(f"Nenhum texto extraível em '{path.name}'.")
+        raise ExtractionError(f"No extractable text in '{path.name}'.")
     return pages
