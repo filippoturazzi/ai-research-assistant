@@ -9,7 +9,7 @@ _MAX_ATTEMPTS = 3
 class GroqChat:
     def __init__(self, api_key: str | None = None, client=None):
         if client is None:
-            from groq import Groq  # import tardio
+            from groq import Groq  # lazy import
             key = api_key or os.environ.get("GROQ_API_KEY")
             if not key:
                 raise GenerationError(

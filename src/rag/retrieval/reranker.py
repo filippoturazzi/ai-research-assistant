@@ -7,7 +7,7 @@ from rag.models import Chunk
 class Reranker:
     def __init__(self, model_name: str = RERANKER_MODEL, model=None):
         if model is None:
-            from sentence_transformers import CrossEncoder  # import tardio: pesado
+            from sentence_transformers import CrossEncoder  # lazy import: heavy dependency
             model = CrossEncoder(model_name)
         self._model = model
 
