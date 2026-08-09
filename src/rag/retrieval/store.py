@@ -18,6 +18,10 @@ class IndexStore:
         self.bm25 = BM25Index([])
 
     def add(self, chunks: list[Chunk], vectors: np.ndarray) -> None:
+        if len(chunks) != len(vectors):
+            raise ValueError(
+                f"chunks ({len(chunks)}) and vectors ({len(vectors)}) must have the same length"
+            )
         self.chunks.extend(chunks)
         self.vectors.add(vectors)
         self.bm25.add([c.text for c in chunks])

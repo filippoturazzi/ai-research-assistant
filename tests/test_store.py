@@ -37,3 +37,11 @@ def test_save_load_roundtrip(tmp_path):
 def test_load_missing_raises(tmp_path):
     with pytest.raises(IndexNotFoundError):
         IndexStore.load(tmp_path / "nope")
+
+
+def test_add_mismatched_lengths_raises():
+    store = IndexStore(dim=4)
+    with pytest.raises(ValueError, match="chunks.*and vectors.*must have the same length"):
+        store.add([_chunk("a", 0, "text1"), _chunk("b", 0, "text2")], _vecs(1))
+    assert len(store.chunks) == 0
+    assert store.vectors.size == 0
