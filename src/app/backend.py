@@ -21,6 +21,7 @@ if _mode() != "embedded":
     from app.api_client import (ApiConnectionError, ApiError, ask, documents,
                                 metrics, send_feedback, upload)
 else:
+    import streamlit as st
     import threading
     import time
     from dataclasses import asdict
@@ -44,31 +45,28 @@ else:
 
     def _bridge_secrets() -> None:
         try:
-            import streamlit as st
             if "GROQ_API_KEY" in st.secrets:
                 os.environ.setdefault("GROQ_API_KEY", st.secrets["GROQ_API_KEY"])
         except Exception:
             pass
 
+    @st.cache_resource(show_spinner="Loading models and index (first visit only)...")
+    def _cached_service():
+        _bridge_secrets()
+        from rag.config import DB_PATH, DOCUMENTS_DIR, INDEX_DIR
+        from rag.feedback.db import FeedbackDB
+        from rag.generation.groq_chat import GroqChat
+        from rag.retrieval.embedder import Embedder
+        from rag.retrieval.reranker import Reranker
+        from rag.retrieval.store import IndexStore
+        from rag.service import RAGService
+
+        return RAGService(store=IndexStore.load(INDEX_DIR), embedder=Embedder(),
+                          reranker=Reranker(), chat=GroqChat(), db=FeedbackDB(DB_PATH),
+                          index_dir=INDEX_DIR, documents_dir=DOCUMENTS_DIR)
+
     def _build_service():
-        import streamlit as st
-
-        @st.cache_resource(show_spinner="Loading models and index (first visit only)...")
-        def _service():
-            _bridge_secrets()
-            from rag.config import DB_PATH, DOCUMENTS_DIR, INDEX_DIR
-            from rag.feedback.db import FeedbackDB
-            from rag.generation.groq_chat import GroqChat
-            from rag.retrieval.embedder import Embedder
-            from rag.retrieval.reranker import Reranker
-            from rag.retrieval.store import IndexStore
-            from rag.service import RAGService
-
-            return RAGService(store=IndexStore.load(INDEX_DIR), embedder=Embedder(),
-                              reranker=Reranker(), chat=GroqChat(), db=FeedbackDB(DB_PATH),
-                              index_dir=INDEX_DIR, documents_dir=DOCUMENTS_DIR)
-
-        return _service()
+        return _cached_service()
 
     def ask(question: str, history: list[dict], language: str = "en") -> dict:
         _check_rate()
