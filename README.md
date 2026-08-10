@@ -1,16 +1,6 @@
----
-title: AI Research Assistant
-emoji: 📚
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # 📚 AI Research Assistant — Advanced RAG
 
-**🔴 Live demo:** <https://huggingface.co/spaces/YOUR_HF_USERNAME/ai-research-assistant> — no setup needed, just open and ask.
+**🔴 Live demo:** <https://ai-research-assistant-turazzi.streamlit.app> — no setup needed, just open and ask. *(First visit after idle may take ~1-2 min while the app wakes up.)*
 
 A research assistant over classic AI papers, built **from scratch** (no LangChain)
 to demonstrate advanced RAG techniques:
@@ -24,9 +14,7 @@ to demonstrate advanced RAG techniques:
 - **Bilingual UI** — English by default, with a Português option that switches
   the interface and the assistant's answers
 
-> **Note on the hosted demo:** the Space's disk is ephemeral — uploaded PDFs and
-> feedback are cleared whenever the Space restarts. Ask up to 10 questions per
-> minute (public rate limit).
+> **Note on the hosted demo:** it runs the RAG core in-process (embedded mode) on Streamlit Community Cloud; the FastAPI layer runs locally and in Docker. Uploaded PDFs and feedback are cleared whenever the app restarts. Ask up to 10 questions per minute (public rate limit).
 
 ## Architecture
 
