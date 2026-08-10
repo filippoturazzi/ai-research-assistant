@@ -1,6 +1,6 @@
 import streamlit as st
 
-from app.api_client import ApiConnectionError, ApiError, ask, send_feedback
+from app.backend import ApiConnectionError, ApiError, ask, send_feedback
 from app.translations import language_selector, t
 
 st.set_page_config(page_title="AI Research Assistant", page_icon="📚", layout="wide")

@@ -1,6 +1,6 @@
 import streamlit as st
 
-from app.api_client import ApiConnectionError, ApiError, metrics
+from app.backend import ApiConnectionError, ApiError, metrics
 from app.translations import language_selector, t
 
 lang = language_selector()
