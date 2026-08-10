@@ -1,0 +1,16 @@
+.venv/
+.git/
+.github/
+.superpowers/
+.claude/
+data/index/
+data/documents/*.pdf
+data/feedback.db
+docs/
+tests/
+.env
+.env.example
+__pycache__/
+*.egg-info/
+.pytest_cache/
+README.md
