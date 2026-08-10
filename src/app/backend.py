@@ -28,7 +28,8 @@ else:
     from pathlib import Path
 
     from app.api_client import ApiConnectionError, ApiError
-    from rag.errors import DuplicateDocumentError, ExtractionError, GenerationError
+    from rag.errors import (DuplicateDocumentError, ExtractionError, GenerationError,
+                            IndexNotFoundError)
 
     _RATE_LIMIT = 10
     _RATE_WINDOW_S = 60
@@ -68,12 +69,19 @@ else:
     def _build_service():
         return _cached_service()
 
+    def _service_or_api_error():
+        try:
+            return _build_service()
+        except (GenerationError, IndexNotFoundError) as exc:
+            raise ApiError(str(exc)) from exc
+
     def ask(question: str, history: list[dict], language: str = "en") -> dict:
         _check_rate()
         if len(question) > 500:
             raise ApiError("Question too long (max 500 characters).")
+        service = _service_or_api_error()
         try:
-            result = _build_service().ask(question, history, language)
+            result = service.ask(question, history, language)
         except GenerationError as exc:
             raise ApiError(str(exc)) from exc
         return {"interaction_id": result.interaction_id, "answer": result.answer,
@@ -82,18 +90,19 @@ else:
 
     def upload(filename: str, data: bytes) -> dict:
         _check_rate()
+        service = _service_or_api_error()
         try:
-            added = _build_service().add_document(data, filename)
+            added = service.add_document(data, filename)
         except (DuplicateDocumentError, ExtractionError, ValueError) as exc:
             raise ApiError(str(exc)) from exc
         return {"doc_id": Path(filename).stem, "chunks_added": added}
 
     def send_feedback(interaction_id: int, rating: int) -> dict:
-        _build_service().feedback(interaction_id, rating)
+        _service_or_api_error().feedback(interaction_id, rating)
         return {"ok": True}
 
     def metrics() -> dict:
-        return _build_service().metrics()
+        return _service_or_api_error().metrics()
 
     def documents() -> list:
-        return _build_service().documents()
+        return _service_or_api_error().documents()

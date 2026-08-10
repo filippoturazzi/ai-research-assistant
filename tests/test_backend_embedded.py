@@ -87,3 +87,16 @@ def test_embedded_upload_and_misc(embedded_backend, fake_service):
     assert embedded_backend.send_feedback(7, 1) == {"ok": True}
     assert embedded_backend.metrics()["total_questions"] == 1
     assert embedded_backend.documents()[0]["doc_id"] == "d"
+
+
+def test_embedded_service_build_failure_becomes_api_error(embedded_backend, monkeypatch):
+    from rag.errors import GenerationError
+
+    def boom():
+        raise GenerationError("GROQ_API_KEY is not set")
+
+    monkeypatch.setattr(embedded_backend, "_build_service", boom)
+    with pytest.raises(embedded_backend.ApiError):
+        embedded_backend.metrics()
+    with pytest.raises(embedded_backend.ApiError):
+        embedded_backend.documents()
