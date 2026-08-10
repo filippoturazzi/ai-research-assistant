@@ -13,6 +13,9 @@ COPY --chown=user pyproject.toml ./
 COPY --chown=user src ./src
 COPY --chown=user scripts ./scripts
 
+# CPU-only torch (the default PyPI wheel bundles unused CUDA libraries)
+RUN pip install --no-cache-dir --user torch --index-url https://download.pytorch.org/whl/cpu
+
 RUN pip install --no-cache-dir --user .
 
 # Bake the default collection and index into the image
