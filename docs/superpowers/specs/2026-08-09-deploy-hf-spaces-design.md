@@ -1,7 +1,7 @@
 # Deploy: Hugging Face Spaces + GitHub — Design
 
 **Data:** 2026-08-09
-**Status:** Aprovado em conversa; aguardando revisão final do spec
+**Status:** SUBSTITUÍDO em 2026-08-10 — na publicação, o Hugging Face retornou 402: Spaces Docker/Gradio agora exigem assinatura PRO (só Spaces estáticos são gratuitos), e o SDK Streamlit foi descontinuado (400). As Tasks 1-3 do plano (proteções de API, Docker, CI) permanecem válidas e mergeadas; a hospedagem pivotou para o Streamlit Community Cloud — ver `2026-08-10-deploy-streamlit-cloud-design.md`.
 **Contexto:** O AI Research Assistant roda local (FastAPI + Streamlit + modelos de embedding em CPU). Este spec o coloca online para demo pública de portfólio, sem custo, testável por URL.
 
 ## Decisões
