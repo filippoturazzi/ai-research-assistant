@@ -3,7 +3,8 @@ FROM python:3.12-slim
 RUN useradd -m -u 1000 user
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH \
-    HF_HOME=/home/user/.cache/huggingface
+    HF_HOME=/home/user/.cache/huggingface \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 RUN chown user /app

@@ -40,6 +40,9 @@ def create_app(service=None, rate_limit: int = 10, rate_window_s: int = 60) -> F
     def svc():
         return app.state.service
 
+    # Behind the Streamlit UI every request arrives from 127.0.0.1, so in the
+    # deployed Space this per-IP limit acts as a single global cap — which also
+    # doubles as a budget guard for the shared Groq free tier.
     def _check_rate(request: Request) -> None:
         ip = request.client.host if request.client else "unknown"
         now = time.monotonic()

@@ -59,7 +59,7 @@ for message in st.session_state.messages:
         if message.get("interaction_id"):
             _render_feedback(message["interaction_id"])
 
-if question := st.chat_input(t("chat_placeholder", lang)):
+if question := st.chat_input(t("chat_placeholder", lang), max_chars=500):
     st.session_state.messages.append({"role": "user", "content": question})
     with st.chat_message("user"):
         st.markdown(question)
