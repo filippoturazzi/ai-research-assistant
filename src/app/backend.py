@@ -76,11 +76,16 @@ else:
             for name in [m for m in list(sys.modules)
                          if m == "rag" or m.startswith("rag.")]:
                 del sys.modules[name]
+            # also drop cached resources: any cached service was built from
+            # the module generation just purged
+            st.cache_resource.clear()
             sys._rag_loaded_version = version
         return version
 
+    # code_version (not "version"): the rename shifts this function's cache
+    # hash, orphaning entries a pre-purge deploy built from stale modules
     @st.cache_resource(show_spinner="Loading models and index (first visit only)...")
-    def _cached_service(version: str):
+    def _cached_service(code_version: str):
         _bridge_secrets()
         from rag.config import DB_PATH, DOCUMENTS_DIR, INDEX_DIR
         from rag.feedback.db import FeedbackDB

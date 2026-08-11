@@ -150,6 +150,31 @@ def test_build_service_purges_stale_rag_modules(embedded_backend, monkeypatch):
     assert sys._rag_loaded_version == embedded_backend._code_version()
 
 
+def test_purge_also_clears_streamlit_resource_cache(embedded_backend, monkeypatch):
+    import sys
+    cleared = []
+    monkeypatch.setattr(embedded_backend.st.cache_resource, "clear",
+                        lambda: cleared.append(True), raising=False)
+    monkeypatch.setattr(sys, "_rag_loaded_version", "outdated", raising=False)
+
+    embedded_backend._ensure_fresh_rag()
+
+    assert cleared
+
+
+def test_no_cache_clear_when_version_current(embedded_backend, monkeypatch):
+    import sys
+    cleared = []
+    monkeypatch.setattr(embedded_backend.st.cache_resource, "clear",
+                        lambda: cleared.append(True), raising=False)
+    monkeypatch.setattr(sys, "_rag_loaded_version",
+                        embedded_backend._code_version(), raising=False)
+
+    embedded_backend._ensure_fresh_rag()
+
+    assert not cleared
+
+
 def test_build_service_keeps_modules_when_version_current(embedded_backend, monkeypatch):
     import sys
     import types
