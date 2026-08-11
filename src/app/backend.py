@@ -24,15 +24,19 @@ if _mode() != "embedded":
 else:
     import streamlit as st
     import hashlib
+    import sys
     import threading
     import time
     from dataclasses import asdict
     from pathlib import Path
 
     from app.api_client import ApiConnectionError, ApiError
-    from rag.errors import (DocumentNotFoundError, DownloadError,
-                            DuplicateDocumentError, ExtractionError,
-                            GenerationError, IndexNotFoundError)
+
+    # NOTE: no top-level `rag` imports here. Streamlit Cloud reloads app/
+    # modules on deploy but never the rag package (outside the watched app
+    # folder), so any rag classes bound at import time could belong to a
+    # previous deploy. rag is imported inside functions, always after
+    # _ensure_fresh_rag() has synced sys.modules with the code on disk.
 
     _RATE_LIMIT = 10
     _RATE_WINDOW_S = 60
@@ -55,9 +59,6 @@ else:
             pass
 
     def _code_version(root: Path | None = None) -> str:
-        # Streamlit Cloud reloads modules on deploy without restarting the
-        # process, so a cached service built from older code would survive;
-        # keying the cache on the rag sources forces a rebuild per deploy.
         if root is None:
             import rag
             root = Path(rag.__file__).parent
@@ -65,6 +66,18 @@ else:
         for path in sorted(root.rglob("*.py")):
             digest.update(path.read_bytes())
         return digest.hexdigest()
+
+    def _ensure_fresh_rag() -> str:
+        # The marker lives on `sys` because it must survive reloads of this
+        # module; when the rag sources on disk differ from what this process
+        # loaded, drop the package so the next import picks up the new code.
+        version = _code_version()
+        if getattr(sys, "_rag_loaded_version", None) != version:
+            for name in [m for m in list(sys.modules)
+                         if m == "rag" or m.startswith("rag.")]:
+                del sys.modules[name]
+            sys._rag_loaded_version = version
+        return version
 
     @st.cache_resource(show_spinner="Loading models and index (first visit only)...")
     def _cached_service(version: str):
@@ -82,9 +95,11 @@ else:
                           index_dir=INDEX_DIR, documents_dir=DOCUMENTS_DIR)
 
     def _build_service():
-        return _cached_service(_code_version())
+        return _cached_service(_ensure_fresh_rag())
 
     def _service_or_api_error():
+        _ensure_fresh_rag()
+        from rag.errors import GenerationError, IndexNotFoundError
         try:
             return _build_service()
         except (GenerationError, IndexNotFoundError) as exc:
@@ -95,6 +110,7 @@ else:
         if len(question) > 500:
             raise ApiError("Question too long (max 500 characters).")
         service = _service_or_api_error()
+        from rag.errors import GenerationError
         try:
             result = service.ask(question, history, language)
         except GenerationError as exc:
@@ -110,6 +126,7 @@ else:
     def remove_document(doc_id: str) -> dict:
         _check_rate()
         service = _service_or_api_error()
+        from rag.errors import DocumentNotFoundError
         try:
             removed = service.remove_document(doc_id)
         except DocumentNotFoundError as exc:
@@ -123,6 +140,8 @@ else:
     def restore_defaults() -> dict:
         _check_rate()
         service = _service_or_api_error()
+        from rag.errors import (DownloadError, DuplicateDocumentError,
+                                ExtractionError)
         try:
             return service.restore_default_documents()
         except (DownloadError, DuplicateDocumentError, ExtractionError) as exc:

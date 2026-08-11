@@ -137,6 +137,33 @@ def test_build_service_keys_cache_on_current_code_version(embedded_backend, monk
     assert calls == [embedded_backend._code_version()]
 
 
+def test_build_service_purges_stale_rag_modules(embedded_backend, monkeypatch):
+    import sys
+    import types
+    sys.modules["rag._stale_probe"] = types.ModuleType("rag._stale_probe")
+    monkeypatch.setattr(sys, "_rag_loaded_version", "outdated", raising=False)
+    monkeypatch.setattr(embedded_backend, "_cached_service", lambda version: "svc")
+
+    embedded_backend._build_service()
+
+    assert "rag._stale_probe" not in sys.modules
+    assert sys._rag_loaded_version == embedded_backend._code_version()
+
+
+def test_build_service_keeps_modules_when_version_current(embedded_backend, monkeypatch):
+    import sys
+    import types
+    monkeypatch.setattr(sys, "_rag_loaded_version",
+                        embedded_backend._code_version(), raising=False)
+    sys.modules["rag._stale_probe"] = types.ModuleType("rag._stale_probe")
+    monkeypatch.setattr(embedded_backend, "_cached_service", lambda version: "svc")
+
+    embedded_backend._build_service()
+
+    assert "rag._stale_probe" in sys.modules
+    del sys.modules["rag._stale_probe"]
+
+
 def test_embedded_service_build_failure_becomes_api_error(embedded_backend, monkeypatch):
     from rag.errors import GenerationError
 
