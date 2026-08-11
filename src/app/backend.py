@@ -23,9 +23,11 @@ if _mode() != "embedded":
                                 restore_defaults, send_feedback, upload)
 else:
     import streamlit as st
+    import hashlib
     import threading
     import time
     from dataclasses import asdict
+    from pathlib import Path
 
     from app.api_client import ApiConnectionError, ApiError
     from rag.errors import (DocumentNotFoundError, DownloadError,
@@ -52,8 +54,20 @@ else:
         except Exception:
             pass
 
+    def _code_version(root: Path | None = None) -> str:
+        # Streamlit Cloud reloads modules on deploy without restarting the
+        # process, so a cached service built from older code would survive;
+        # keying the cache on the rag sources forces a rebuild per deploy.
+        if root is None:
+            import rag
+            root = Path(rag.__file__).parent
+        digest = hashlib.md5()
+        for path in sorted(root.rglob("*.py")):
+            digest.update(path.read_bytes())
+        return digest.hexdigest()
+
     @st.cache_resource(show_spinner="Loading models and index (first visit only)...")
-    def _cached_service():
+    def _cached_service(version: str):
         _bridge_secrets()
         from rag.config import DB_PATH, DOCUMENTS_DIR, INDEX_DIR
         from rag.feedback.db import FeedbackDB
@@ -68,7 +82,7 @@ else:
                           index_dir=INDEX_DIR, documents_dir=DOCUMENTS_DIR)
 
     def _build_service():
-        return _cached_service()
+        return _cached_service(_code_version())
 
     def _service_or_api_error():
         try:

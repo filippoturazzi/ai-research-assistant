@@ -121,6 +121,22 @@ def test_embedded_remove_missing_becomes_api_error(embedded_backend, fake_servic
         embedded_backend.remove_document("missing")
 
 
+def test_code_version_stable_until_source_changes(embedded_backend, tmp_path):
+    (tmp_path / "a.py").write_text("x = 1")
+    v1 = embedded_backend._code_version(tmp_path)
+    assert v1 == embedded_backend._code_version(tmp_path)
+    (tmp_path / "a.py").write_text("x = 2")
+    assert embedded_backend._code_version(tmp_path) != v1
+
+
+def test_build_service_keys_cache_on_current_code_version(embedded_backend, monkeypatch):
+    calls = []
+    monkeypatch.setattr(embedded_backend, "_cached_service",
+                        lambda version: calls.append(version) or "svc")
+    assert embedded_backend._build_service() == "svc"
+    assert calls == [embedded_backend._code_version()]
+
+
 def test_embedded_service_build_failure_becomes_api_error(embedded_backend, monkeypatch):
     from rag.errors import GenerationError
 
