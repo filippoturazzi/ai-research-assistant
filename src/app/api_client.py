@@ -25,8 +25,9 @@ def _handle(response: requests.Response) -> dict | list:
 
 
 def _request(method: str, url: str, **kwargs) -> dict | list:
+    kwargs.setdefault("timeout", _TIMEOUT)
     try:
-        response = requests.request(method, url, timeout=_TIMEOUT, **kwargs)
+        response = requests.request(method, url, **kwargs)
     except requests.exceptions.RequestException as exc:
         raise ApiConnectionError(
             f"Could not reach the API — is it running? ({exc.__class__.__name__})"
@@ -43,6 +44,19 @@ def ask(question: str, history: list[dict], language: str = "en") -> dict:
 def upload(filename: str, data: bytes) -> dict:
     return _request("POST", f"{API_URL}/upload",
                      files={"file": (filename, data, "application/pdf")})
+
+
+def remove_document(doc_id: str) -> dict:
+    return _request("DELETE", f"{API_URL}/documents/{doc_id}")
+
+
+def reset_documents() -> dict:
+    return _request("POST", f"{API_URL}/documents/reset")
+
+
+def restore_defaults() -> dict:
+    # downloads + re-embeds 5 papers; needs far more than the default timeout
+    return _request("POST", f"{API_URL}/documents/restore-defaults", timeout=600)
 
 
 def send_feedback(interaction_id: int, rating: int) -> dict:

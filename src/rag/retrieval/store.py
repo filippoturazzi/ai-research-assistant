@@ -29,6 +29,25 @@ class IndexStore:
     def doc_ids(self) -> set[str]:
         return {c.doc_id for c in self.chunks}
 
+    def remove(self, doc_id: str) -> int:
+        keep = [i for i, c in enumerate(self.chunks) if c.doc_id != doc_id]
+        removed = len(self.chunks) - len(keep)
+        if removed == 0:
+            return 0
+        # IndexFlatIP has no row deletion; rebuild from the stored vectors.
+        surviving = self.vectors.reconstruct_all()[keep]
+        self.chunks = [self.chunks[i] for i in keep]
+        self.vectors = VectorIndex(self.vectors.dim)
+        if len(surviving):
+            self.vectors.add(surviving)
+        self.bm25 = BM25Index([c.text for c in self.chunks])
+        return removed
+
+    def clear(self) -> None:
+        self.chunks = []
+        self.vectors = VectorIndex(self.vectors.dim)
+        self.bm25 = BM25Index([])
+
     def save(self, dir: Path) -> None:
         dir.mkdir(parents=True, exist_ok=True)
         self.vectors.save(dir / "index.faiss")

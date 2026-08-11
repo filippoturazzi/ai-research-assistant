@@ -4,7 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import create_app
-from rag.errors import DuplicateDocumentError, ExtractionError, GenerationError
+from rag.errors import (DocumentNotFoundError, DownloadError,
+                        DuplicateDocumentError, ExtractionError, GenerationError)
 from rag.service import AskResult, Source
 
 
@@ -25,6 +26,20 @@ class FakeService:
         if filename == "bad.pdf":
             raise ExtractionError("sem texto")
         return 7
+
+    def remove_document(self, doc_id):
+        if doc_id == "missing":
+            raise DocumentNotFoundError("not indexed")
+        self.last_removed = doc_id
+        return 2
+
+    def reset_documents(self):
+        return 5
+
+    def restore_default_documents(self):
+        if getattr(self, "fail_download", False):
+            raise DownloadError("arxiv down")
+        return {"documents_added": 5, "chunks_added": 42}
 
     def feedback(self, interaction_id, rating, comment=None):
         self.last_feedback = (interaction_id, rating, comment)
@@ -95,6 +110,48 @@ def test_upload_paths(client):
     assert c.post("/upload", files=[dup]).status_code == 409
     bad = ("file", ("bad.pdf", io.BytesIO(b"%PDF"), "application/pdf"))
     assert c.post("/upload", files=[bad]).status_code == 422
+
+
+def test_delete_document(client):
+    c, service = client
+    r = c.delete("/documents/d")
+    assert r.status_code == 200
+    assert r.json() == {"doc_id": "d", "chunks_removed": 2}
+    assert service.last_removed == "d"
+
+
+def test_delete_missing_document_returns_404(client):
+    c, _ = client
+    assert c.delete("/documents/missing").status_code == 404
+
+
+def test_reset_documents(client):
+    c, _ = client
+    r = c.post("/documents/reset")
+    assert r.status_code == 200
+    assert r.json() == {"chunks_removed": 5}
+
+
+def test_restore_defaults(client):
+    c, _ = client
+    r = c.post("/documents/restore-defaults")
+    assert r.status_code == 200
+    assert r.json() == {"documents_added": 5, "chunks_added": 42}
+
+
+def test_restore_defaults_download_failure_returns_502(client):
+    c, service = client
+    service.fail_download = True
+    assert c.post("/documents/restore-defaults").status_code == 502
+
+
+def test_rate_limit_shared_with_delete():
+    service = FakeService()
+    app = create_app(service=service, rate_limit=2, rate_window_s=60)
+    c = TestClient(app)
+    assert c.delete("/documents/d").status_code == 200
+    assert c.post("/documents/reset").status_code == 200
+    assert c.delete("/documents/d").status_code == 429
 
 
 def test_health_documents_metrics(client):

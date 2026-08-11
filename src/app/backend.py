@@ -19,7 +19,8 @@ def _mode() -> str:
 
 if _mode() != "embedded":
     from app.api_client import (ApiConnectionError, ApiError, ask, documents,
-                                metrics, send_feedback, upload)
+                                metrics, remove_document, reset_documents,
+                                restore_defaults, send_feedback, upload)
 else:
     import streamlit as st
     import threading
@@ -28,8 +29,9 @@ else:
     from pathlib import Path
 
     from app.api_client import ApiConnectionError, ApiError
-    from rag.errors import (DuplicateDocumentError, ExtractionError, GenerationError,
-                            IndexNotFoundError)
+    from rag.errors import (DocumentNotFoundError, DownloadError,
+                            DuplicateDocumentError, ExtractionError,
+                            GenerationError, IndexNotFoundError)
 
     _RATE_LIMIT = 10
     _RATE_WINDOW_S = 60
@@ -96,6 +98,27 @@ else:
         except (DuplicateDocumentError, ExtractionError, ValueError) as exc:
             raise ApiError(str(exc)) from exc
         return {"doc_id": Path(filename).stem, "chunks_added": added}
+
+    def remove_document(doc_id: str) -> dict:
+        _check_rate()
+        service = _service_or_api_error()
+        try:
+            removed = service.remove_document(doc_id)
+        except DocumentNotFoundError as exc:
+            raise ApiError(str(exc)) from exc
+        return {"doc_id": doc_id, "chunks_removed": removed}
+
+    def reset_documents() -> dict:
+        _check_rate()
+        return {"chunks_removed": _service_or_api_error().reset_documents()}
+
+    def restore_defaults() -> dict:
+        _check_rate()
+        service = _service_or_api_error()
+        try:
+            return service.restore_default_documents()
+        except (DownloadError, DuplicateDocumentError, ExtractionError) as exc:
+            raise ApiError(str(exc)) from exc
 
     def send_feedback(interaction_id: int, rating: int) -> dict:
         _service_or_api_error().feedback(interaction_id, rating)

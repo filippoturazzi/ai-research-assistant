@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, UploadFile
 
 from api.schemas import AskRequest, AskResponse, FeedbackRequest, UploadResponse
-from rag.errors import DuplicateDocumentError, ExtractionError, GenerationError
+from rag.errors import (DocumentNotFoundError, DownloadError,
+                        DuplicateDocumentError, ExtractionError, GenerationError)
 
 
 def _build_real_service():
@@ -79,6 +80,28 @@ def create_app(service=None, rate_limit: int = 10, rate_window_s: int = 60) -> F
         except (ExtractionError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
         return UploadResponse(doc_id=Path(file.filename).stem, chunks_added=added)
+
+    @app.delete("/documents/{doc_id}")
+    def delete_document(doc_id: str, request: Request):
+        _check_rate(request)
+        try:
+            removed = svc().remove_document(doc_id)
+        except DocumentNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        return {"doc_id": doc_id, "chunks_removed": removed}
+
+    @app.post("/documents/reset")
+    def reset_documents(request: Request):
+        _check_rate(request)
+        return {"chunks_removed": svc().reset_documents()}
+
+    @app.post("/documents/restore-defaults")
+    def restore_defaults(request: Request):
+        _check_rate(request)
+        try:
+            return svc().restore_default_documents()
+        except DownloadError as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
 
     @app.post("/feedback")
     def feedback(body: FeedbackRequest):

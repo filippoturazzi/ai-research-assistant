@@ -4,7 +4,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from rag.config import GENERATION_MODEL
-from rag.errors import DuplicateDocumentError
+from rag.errors import (DocumentNotFoundError, DuplicateDocumentError,
+                        EmptyIndexError)
 from rag.feedback.db import FeedbackDB
 from rag.generation.generator import generate_answer
 from rag.generation.groq_chat import GroqChat
@@ -45,6 +46,10 @@ class RAGService:
 
     def ask(self, question: str, history: list[dict] | None = None,
             language: str = "en") -> AskResult:
+        if not self.store.chunks:
+            raise EmptyIndexError(
+                "The knowledge base is empty — add documents on the Documents page first."
+            )
         start = time.perf_counter()
         rewritten = rewrite_query(self.chat, question, history or [], language)
         retrieved = self.retriever.retrieve(rewritten)
@@ -73,6 +78,37 @@ class RAGService:
         added = ingest_pdf(path, self.store, self.embedder)
         self.store.save(self.index_dir)
         return added
+
+    def remove_document(self, doc_id: str) -> int:
+        if doc_id not in self.store.doc_ids():
+            raise DocumentNotFoundError(f"Document '{doc_id}' is not indexed.")
+        removed = self.store.remove(doc_id)
+        pdf = self.documents_dir / f"{Path(doc_id).name}.pdf"
+        if pdf.exists():
+            pdf.unlink()
+        self.store.save(self.index_dir)
+        return removed
+
+    def reset_documents(self) -> int:
+        removed = len(self.store.chunks)
+        self.store.clear()
+        if self.documents_dir.exists():
+            for pdf in self.documents_dir.glob("*.pdf"):
+                pdf.unlink()
+        self.store.save(self.index_dir)
+        return removed
+
+    def restore_default_documents(self, fetch=None) -> dict:
+        if fetch is None:
+            from rag.ingestion.default_papers import fetch_default_papers
+            fetch = fetch_default_papers
+        self.reset_documents()
+        documents_added = 0
+        chunks_added = 0
+        for filename, data in fetch():
+            chunks_added += self.add_document(data, filename)
+            documents_added += 1
+        return {"documents_added": documents_added, "chunks_added": chunks_added}
 
     def feedback(self, interaction_id: int, rating: int, comment: str | None = None) -> None:
         self.db.add_feedback(interaction_id, rating, comment)

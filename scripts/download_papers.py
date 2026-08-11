@@ -3,13 +3,7 @@ from pathlib import Path
 
 import requests
 
-PAPERS = {
-    "attention_is_all_you_need": "https://arxiv.org/pdf/1706.03762",
-    "retrieval_augmented_generation": "https://arxiv.org/pdf/2005.11401",
-    "bert": "https://arxiv.org/pdf/1810.04805",
-    "gpt3_language_models_are_few_shot_learners": "https://arxiv.org/pdf/2005.14165",
-    "dense_passage_retrieval": "https://arxiv.org/pdf/2004.04906",
-}
+from rag.ingestion.default_papers import PAPERS
 
 DEST = Path("data/documents")
 

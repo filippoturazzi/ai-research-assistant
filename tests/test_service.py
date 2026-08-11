@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from rag.errors import DuplicateDocumentError
+from rag.errors import (DocumentNotFoundError, DuplicateDocumentError,
+                        EmptyIndexError)
 from rag.feedback.db import FeedbackDB
 from rag.models import Chunk
 from rag.retrieval.store import IndexStore
@@ -82,6 +83,53 @@ def test_add_document_duplicate_does_not_overwrite_pdf(service, sample_pdf, tmp_
         service.add_document(b"other bytes", "dup_doc.pdf")
 
     assert stored_path.read_bytes() == original_bytes
+
+
+def test_remove_document_deletes_pdf_and_persists(service, sample_pdf, tmp_path):
+    service.add_document(sample_pdf.read_bytes(), "novo_paper.pdf")
+
+    removed = service.remove_document("novo_paper")
+
+    assert removed > 0
+    assert not (tmp_path / "docs" / "novo_paper.pdf").exists()
+    assert all(d["doc_id"] != "novo_paper" for d in service.documents())
+    chunks_json = (tmp_path / "index" / "chunks.json").read_text(encoding="utf-8")
+    assert "novo_paper" not in chunks_json
+
+
+def test_remove_document_missing_raises(service):
+    with pytest.raises(DocumentNotFoundError):
+        service.remove_document("nao_existe")
+
+
+def test_reset_documents_empties_collection(service, sample_pdf, tmp_path):
+    service.add_document(sample_pdf.read_bytes(), "novo_paper.pdf")
+
+    removed = service.reset_documents()
+
+    assert removed > 0
+    assert service.documents() == []
+    assert list((tmp_path / "docs").glob("*.pdf")) == []
+    assert (tmp_path / "index" / "chunks.json").exists()
+
+
+def test_restore_default_documents_replaces_collection(service, sample_pdf):
+    def fake_fetch():
+        yield "paper_um.pdf", sample_pdf.read_bytes()
+        yield "paper_dois.pdf", sample_pdf.read_bytes()
+
+    result = service.restore_default_documents(fetch=fake_fetch)
+
+    assert result["documents_added"] == 2
+    assert result["chunks_added"] > 0
+    doc_ids = {d["doc_id"] for d in service.documents()}
+    assert doc_ids == {"paper_um", "paper_dois"}  # old doc "d" gone
+
+
+def test_ask_empty_base_raises_friendly_error(service):
+    service.reset_documents()
+    with pytest.raises(EmptyIndexError):
+        service.ask("pergunta?")
 
 
 def test_ask_portuguese_uses_pt_prompt(service):

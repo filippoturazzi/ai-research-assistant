@@ -21,6 +21,19 @@ def test_search_empty_index():
     assert VectorIndex(dim=4).search(_unit([1, 0, 0, 0]), k=5) == []
 
 
+def test_reconstruct_all_returns_stored_vectors():
+    idx = VectorIndex(dim=4)
+    vectors = np.stack([_unit([1, 0, 0, 0]), _unit([0, 1, 1, 0])])
+    idx.add(vectors)
+    out = idx.reconstruct_all()
+    assert out.shape == (2, 4)
+    assert np.allclose(out, vectors)
+
+
+def test_reconstruct_all_empty_index():
+    assert VectorIndex(dim=4).reconstruct_all().shape == (0, 4)
+
+
 def test_save_and_load(tmp_path):
     idx = VectorIndex(dim=4)
     idx.add(np.stack([_unit([0, 0, 1, 0])]))

@@ -12,3 +12,15 @@ class IndexNotFoundError(Exception):
 
 class DuplicateDocumentError(Exception):
     """A document with the same doc_id is already indexed."""
+
+
+class DocumentNotFoundError(Exception):
+    """No indexed document with the given doc_id."""
+
+
+class DownloadError(Exception):
+    """Failed to download a default paper."""
+
+
+class EmptyIndexError(GenerationError):
+    """The knowledge base has no documents; nothing to answer from."""

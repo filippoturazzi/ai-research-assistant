@@ -28,6 +28,18 @@ class FakeService:
     def add_document(self, data, filename):
         return 3
 
+    def remove_document(self, doc_id):
+        from rag.errors import DocumentNotFoundError
+        if doc_id == "missing":
+            raise DocumentNotFoundError("not indexed")
+        return 2
+
+    def reset_documents(self):
+        return 5
+
+    def restore_default_documents(self):
+        return {"documents_added": 5, "chunks_added": 42}
+
     def feedback(self, interaction_id, rating, comment=None):
         self.last = (interaction_id, rating)
 
@@ -87,6 +99,20 @@ def test_embedded_upload_and_misc(embedded_backend, fake_service):
     assert embedded_backend.send_feedback(7, 1) == {"ok": True}
     assert embedded_backend.metrics()["total_questions"] == 1
     assert embedded_backend.documents()[0]["doc_id"] == "d"
+
+
+def test_embedded_document_management(embedded_backend, fake_service):
+    embedded_backend._hits.clear()
+    assert embedded_backend.remove_document("d") == {"doc_id": "d", "chunks_removed": 2}
+    assert embedded_backend.reset_documents() == {"chunks_removed": 5}
+    assert embedded_backend.restore_defaults() == {"documents_added": 5,
+                                                   "chunks_added": 42}
+
+
+def test_embedded_remove_missing_becomes_api_error(embedded_backend, fake_service):
+    embedded_backend._hits.clear()
+    with pytest.raises(embedded_backend.ApiError):
+        embedded_backend.remove_document("missing")
 
 
 def test_embedded_service_build_failure_becomes_api_error(embedded_backend, monkeypatch):

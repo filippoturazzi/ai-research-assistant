@@ -23,6 +23,11 @@ class VectorIndex:
         scores, ids = self.index.search(np.asarray([query], dtype="float32"), k)
         return [(int(i), float(s)) for i, s in zip(ids[0], scores[0]) if i != -1]
 
+    def reconstruct_all(self) -> np.ndarray:
+        if self.size == 0:
+            return np.empty((0, self.dim), dtype="float32")
+        return self.index.reconstruct_n(0, self.size)
+
     def save(self, path: Path) -> None:
         faiss.write_index(self.index, str(path))
 
