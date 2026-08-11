@@ -1,13 +1,11 @@
 import threading
 import time
-from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, UploadFile
 
 from api.schemas import AskRequest, AskResponse, FeedbackRequest, UploadResponse
-from rag.errors import (DocumentNotFoundError, DownloadError,
-                        DuplicateDocumentError, ExtractionError, GenerationError)
+from rag.errors import DocumentNotFoundError, DownloadError, GenerationError
 
 
 def _build_real_service():
@@ -70,16 +68,10 @@ def create_app(service=None, rate_limit: int = 10, rate_window_s: int = 60) -> F
         return result
 
     @app.post("/upload", response_model=UploadResponse)
-    async def upload(file: UploadFile, request: Request):
+    async def upload(files: list[UploadFile], request: Request):
         _check_rate(request)
-        data = await file.read()
-        try:
-            added = svc().add_document(data, file.filename)
-        except DuplicateDocumentError as exc:
-            raise HTTPException(status_code=409, detail=str(exc))
-        except (ExtractionError, ValueError) as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
-        return UploadResponse(doc_id=Path(file.filename).stem, chunks_added=added)
+        items = [(f.filename, await f.read()) for f in files]
+        return UploadResponse(results=svc().add_documents(items))
 
     @app.delete("/documents/{doc_id}")
     def delete_document(doc_id: str, request: Request):

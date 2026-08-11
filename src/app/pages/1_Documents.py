@@ -8,8 +8,11 @@ from app.translations import language_selector, t
 lang = language_selector()
 st.title(t("docs_title", lang))
 
-if message := st.session_state.pop("docs_flash", None):
-    st.success(message)
+for message in st.session_state.pop("docs_flash", []):
+    if message.get("kind") == "error":
+        st.error(message["text"])
+    else:
+        st.success(message["text"])
 
 
 def _show_error(exc: Exception) -> None:
@@ -19,16 +22,23 @@ def _show_error(exc: Exception) -> None:
         st.error(str(exc))
 
 
-uploaded = st.file_uploader(t("upload_label", lang), type=["pdf"])
-if uploaded is not None and st.button(t("index_button", lang)):
+uploaded_files = st.file_uploader(t("upload_label", lang), type=["pdf"],
+                                  accept_multiple_files=True)
+if uploaded_files and st.button(t("index_button", lang)):
     try:
         with st.spinner(t("indexing", lang)):
-            result = upload(uploaded.name, uploaded.getvalue())
+            result = upload([(f.name, f.getvalue()) for f in uploaded_files])
     except ApiError as exc:
         _show_error(exc)
     else:
-        st.session_state.docs_flash = t("indexed_ok", lang).format(
-            doc=result["doc_id"], n=result["chunks_added"])
+        flash = []
+        for r in result["results"]:
+            if r["error"] is None:
+                flash.append({"kind": "success", "text": t("indexed_ok", lang).format(
+                    doc=r["doc_id"], n=r["chunks_added"])})
+            else:
+                flash.append({"kind": "error", "text": f"'{r['filename']}': {r['error']}"})
+        st.session_state.docs_flash = flash
         st.rerun()
 
 st.divider()
@@ -51,8 +61,9 @@ for doc in docs:
         except ApiError as exc:
             _show_error(exc)
         else:
-            st.session_state.docs_flash = t("removed_ok", lang).format(
-                doc=result["doc_id"], n=result["chunks_removed"])
+            st.session_state.docs_flash = [{"kind": "success", "text": t(
+                "removed_ok", lang).format(doc=result["doc_id"],
+                                           n=result["chunks_removed"])}]
             st.rerun()
 
 st.divider()
@@ -77,8 +88,8 @@ if st.session_state.docs_confirm == "clear":
         except ApiError as exc:
             _show_error(exc)
         else:
-            st.session_state.docs_flash = t("cleared_ok", lang).format(
-                n=result["chunks_removed"])
+            st.session_state.docs_flash = [{"kind": "success", "text": t(
+                "cleared_ok", lang).format(n=result["chunks_removed"])}]
             st.rerun()
     if col_no.button(t("cancel", lang), key="cancel-clear"):
         st.session_state.docs_confirm = None
@@ -95,8 +106,9 @@ if st.session_state.docs_confirm == "restore":
         except ApiError as exc:
             _show_error(exc)
         else:
-            st.session_state.docs_flash = t("restored_ok", lang).format(
-                docs=result["documents_added"], n=result["chunks_added"])
+            st.session_state.docs_flash = [{"kind": "success", "text": t(
+                "restored_ok", lang).format(docs=result["documents_added"],
+                                            n=result["chunks_added"])}]
             st.rerun()
     if col_no.button(t("cancel", lang), key="cancel-restore"):
         st.session_state.docs_confirm = None

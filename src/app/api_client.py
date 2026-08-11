@@ -41,9 +41,9 @@ def ask(question: str, history: list[dict], language: str = "en") -> dict:
                            "language": language})
 
 
-def upload(filename: str, data: bytes) -> dict:
-    return _request("POST", f"{API_URL}/upload",
-                     files={"file": (filename, data, "application/pdf")})
+def upload(files: list[tuple[str, bytes]]) -> dict:
+    parts = [("files", (name, data, "application/pdf")) for name, data in files]
+    return _request("POST", f"{API_URL}/upload", files=parts)
 
 
 def remove_document(doc_id: str) -> dict:

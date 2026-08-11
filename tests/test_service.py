@@ -85,6 +85,24 @@ def test_add_document_duplicate_does_not_overwrite_pdf(service, sample_pdf, tmp_
     assert stored_path.read_bytes() == original_bytes
 
 
+def test_add_documents_batch_reports_per_file_results(service, sample_pdf, tmp_path):
+    data = sample_pdf.read_bytes()
+
+    results = service.add_documents([
+        ("paper_um.pdf", data),
+        ("paper_um.pdf", data),   # duplicate within the batch
+        ("paper_dois.pdf", data),
+    ])
+
+    assert [r["doc_id"] for r in results] == ["paper_um", "paper_um", "paper_dois"]
+    assert results[0]["chunks_added"] > 0 and results[0]["error"] is None
+    assert results[1]["chunks_added"] == 0 and "paper_um" in results[1]["error"]
+    assert results[2]["chunks_added"] > 0 and results[2]["error"] is None
+    doc_ids = {d["doc_id"] for d in service.documents()}
+    assert {"paper_um", "paper_dois"} <= doc_ids
+    assert (tmp_path / "docs" / "paper_dois.pdf").exists()
+
+
 def test_remove_document_deletes_pdf_and_persists(service, sample_pdf, tmp_path):
     service.add_document(sample_pdf.read_bytes(), "novo_paper.pdf")
 

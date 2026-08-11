@@ -26,7 +26,6 @@ else:
     import threading
     import time
     from dataclasses import asdict
-    from pathlib import Path
 
     from app.api_client import ApiConnectionError, ApiError
     from rag.errors import (DocumentNotFoundError, DownloadError,
@@ -90,14 +89,9 @@ else:
                 "rewritten_query": result.rewritten_query,
                 "sources": [asdict(s) for s in result.sources]}
 
-    def upload(filename: str, data: bytes) -> dict:
+    def upload(files: list[tuple[str, bytes]]) -> dict:
         _check_rate()
-        service = _service_or_api_error()
-        try:
-            added = service.add_document(data, filename)
-        except (DuplicateDocumentError, ExtractionError, ValueError) as exc:
-            raise ApiError(str(exc)) from exc
-        return {"doc_id": Path(filename).stem, "chunks_added": added}
+        return {"results": _service_or_api_error().add_documents(files)}
 
     def remove_document(doc_id: str) -> dict:
         _check_rate()

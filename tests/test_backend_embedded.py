@@ -28,6 +28,11 @@ class FakeService:
     def add_document(self, data, filename):
         return 3
 
+    def add_documents(self, files):
+        from pathlib import Path
+        return [{"filename": f, "doc_id": Path(f).stem, "chunks_added": 3,
+                 "error": None} for f, _ in files]
+
     def remove_document(self, doc_id):
         from rag.errors import DocumentNotFoundError
         if doc_id == "missing":
@@ -87,15 +92,16 @@ def test_embedded_rate_limit(embedded_backend, fake_service, monkeypatch):
     monkeypatch.setattr(embedded_backend, "_RATE_LIMIT", 2)
     embedded_backend._hits.clear()
     embedded_backend.ask("q?", [], "en")
-    embedded_backend.upload("a.pdf", b"%PDF")
+    embedded_backend.upload([("a.pdf", b"%PDF"), ("b.pdf", b"%PDF")])
     with pytest.raises(embedded_backend.ApiError, match="Rate limit"):
         embedded_backend.ask("q?", [], "en")
 
 
 def test_embedded_upload_and_misc(embedded_backend, fake_service):
     embedded_backend._hits.clear()
-    out = embedded_backend.upload("novo_doc.pdf", b"%PDF")
-    assert out == {"doc_id": "novo_doc", "chunks_added": 3}
+    out = embedded_backend.upload([("novo_doc.pdf", b"%PDF"), ("outro.pdf", b"%PDF")])
+    assert [r["doc_id"] for r in out["results"]] == ["novo_doc", "outro"]
+    assert out["results"][0]["chunks_added"] == 3
     assert embedded_backend.send_feedback(7, 1) == {"ok": True}
     assert embedded_backend.metrics()["total_questions"] == 1
     assert embedded_backend.documents()[0]["doc_id"] == "d"

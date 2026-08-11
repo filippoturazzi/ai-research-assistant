@@ -25,8 +25,11 @@ TRANSLATIONS = {
         "pt": "Não consegui falar com a API — ela está rodando?",
     },
     "docs_title": {"en": "📄 Documents", "pt": "📄 Documentos"},
-    "upload_label": {"en": "Add a PDF to the collection", "pt": "Adicionar PDF à coleção"},
-    "index_button": {"en": "Index document", "pt": "Indexar documento"},
+    "upload_label": {
+        "en": "Add PDFs to the collection (select or drag several at once)",
+        "pt": "Adicionar PDFs à coleção (selecione ou arraste vários de uma vez)",
+    },
+    "index_button": {"en": "Index documents", "pt": "Indexar documentos"},
     "indexing": {
         "en": "Extracting, chunking and indexing...",
         "pt": "Extraindo, chunkeando e indexando...",

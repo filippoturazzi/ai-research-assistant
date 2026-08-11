@@ -12,8 +12,8 @@ GENERATION_MODEL = "llama-3.3-70b-versatile"
 REWRITE_MODEL = "llama-3.1-8b-instant"
 
 CHUNK_WORDS = 600      # ~800 tokens
-OVERLAP_WORDS = 110    # ~150 tokens
-CANDIDATES_PER_INDEX = 20
-RERANK_CANDIDATES = 30
+OVERLAP_WORDS = 80    # ~150 tokens
+CANDIDATES_PER_INDEX = 20 # 20 p/bm25 & 20 p/vector search
+RERANK_CANDIDATES = 30 # 40 -> 30
 TOP_K = 5
 RRF_K = 60

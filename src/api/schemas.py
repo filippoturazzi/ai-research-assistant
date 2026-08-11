@@ -34,6 +34,12 @@ class FeedbackRequest(BaseModel):
     comment: str | None = None
 
 
-class UploadResponse(BaseModel):
+class UploadResult(BaseModel):
+    filename: str
     doc_id: str
     chunks_added: int
+    error: str | None = None
+
+
+class UploadResponse(BaseModel):
+    results: list[UploadResult]

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from rag.config import GENERATION_MODEL
 from rag.errors import (DocumentNotFoundError, DuplicateDocumentError,
-                        EmptyIndexError)
+                        EmptyIndexError, ExtractionError)
 from rag.feedback.db import FeedbackDB
 from rag.generation.generator import generate_answer
 from rag.generation.groq_chat import GroqChat
@@ -78,6 +78,19 @@ class RAGService:
         added = ingest_pdf(path, self.store, self.embedder)
         self.store.save(self.index_dir)
         return added
+
+    def add_documents(self, files: list[tuple[str, bytes]]) -> list[dict]:
+        results = []
+        for filename, data in files:
+            doc_id = Path(filename).stem
+            try:
+                added = self.add_document(data, filename)
+                results.append({"filename": filename, "doc_id": doc_id,
+                                "chunks_added": added, "error": None})
+            except (DuplicateDocumentError, ExtractionError, ValueError) as exc:
+                results.append({"filename": filename, "doc_id": doc_id,
+                                "chunks_added": 0, "error": str(exc)})
+        return results
 
     def remove_document(self, doc_id: str) -> int:
         if doc_id not in self.store.doc_ids():

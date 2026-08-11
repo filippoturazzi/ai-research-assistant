@@ -1,4 +1,5 @@
 import io
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,6 +27,18 @@ class FakeService:
         if filename == "bad.pdf":
             raise ExtractionError("sem texto")
         return 7
+
+    def add_documents(self, files):
+        results = []
+        for filename, data in files:
+            try:
+                added = self.add_document(data, filename)
+                results.append({"filename": filename, "doc_id": Path(filename).stem,
+                                "chunks_added": added, "error": None})
+            except (DuplicateDocumentError, ExtractionError) as exc:
+                results.append({"filename": filename, "doc_id": Path(filename).stem,
+                                "chunks_added": 0, "error": str(exc)})
+        return results
 
     def remove_document(self, doc_id):
         if doc_id == "missing":
@@ -102,14 +115,39 @@ def test_feedback_validates_rating(client):
     assert bad.status_code == 422
 
 
-def test_upload_paths(client):
+def _pdf_part(name):
+    return ("files", (name, io.BytesIO(b"%PDF"), "application/pdf"))
+
+
+def test_upload_single_file(client):
     c, _ = client
-    pdf = ("file", ("ok.pdf", io.BytesIO(b"%PDF"), "application/pdf"))
-    assert c.post("/upload", files=[pdf]).status_code == 200
-    dup = ("file", ("dup.pdf", io.BytesIO(b"%PDF"), "application/pdf"))
-    assert c.post("/upload", files=[dup]).status_code == 409
-    bad = ("file", ("bad.pdf", io.BytesIO(b"%PDF"), "application/pdf"))
-    assert c.post("/upload", files=[bad]).status_code == 422
+    r = c.post("/upload", files=[_pdf_part("ok.pdf")])
+    assert r.status_code == 200
+    results = r.json()["results"]
+    assert results == [{"filename": "ok.pdf", "doc_id": "ok",
+                        "chunks_added": 7, "error": None}]
+
+
+def test_upload_multiple_files_reports_per_file_errors(client):
+    c, _ = client
+    r = c.post("/upload", files=[_pdf_part("ok.pdf"), _pdf_part("dup.pdf"),
+                                 _pdf_part("bad.pdf")])
+    assert r.status_code == 200
+    results = r.json()["results"]
+    assert [x["doc_id"] for x in results] == ["ok", "dup", "bad"]
+    assert results[0]["error"] is None
+    assert results[1]["error"] == "dup"
+    assert results[2]["error"] == "sem texto"
+
+
+def test_upload_batch_counts_once_against_rate_limit():
+    service = FakeService()
+    app = create_app(service=service, rate_limit=2, rate_window_s=60)
+    c = TestClient(app)
+    batch = [_pdf_part("a.pdf"), _pdf_part("b.pdf"), _pdf_part("c.pdf")]
+    assert c.post("/upload", files=batch).status_code == 200
+    assert c.post("/ask", json={"question": "q?"}).status_code == 200
+    assert c.post("/ask", json={"question": "q?"}).status_code == 429
 
 
 def test_delete_document(client):
@@ -187,6 +225,5 @@ def test_rate_limit_shared_with_upload():
     app = create_app(service=service, rate_limit=2, rate_window_s=60)
     c = TestClient(app)
     assert c.post("/ask", json={"question": "q?"}).status_code == 200
-    pdf = ("file", ("ok.pdf", io.BytesIO(b"%PDF"), "application/pdf"))
-    assert c.post("/upload", files=[pdf]).status_code == 200
+    assert c.post("/upload", files=[_pdf_part("ok.pdf")]).status_code == 200
     assert c.post("/ask", json={"question": "q?"}).status_code == 429
