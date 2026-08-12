@@ -65,6 +65,10 @@ class FakeService:
     def documents(self):
         return [{"doc_id": "d", "doc_title": "D", "chunks": 3}]
 
+    def suggested_questions(self, language="en"):
+        self.last_suggestions_language = language
+        return ["Q1?", "Q2?", "Q3?"]
+
 
 @pytest.fixture
 def client():
@@ -227,3 +231,22 @@ def test_rate_limit_shared_with_upload():
     assert c.post("/ask", json={"question": "q?"}).status_code == 200
     assert c.post("/upload", files=[_pdf_part("ok.pdf")]).status_code == 200
     assert c.post("/ask", json={"question": "q?"}).status_code == 429
+
+
+def test_suggestions(client):
+    c, service = client
+    r = c.get("/suggestions", params={"language": "pt"})
+    assert r.status_code == 200
+    assert r.json() == {"questions": ["Q1?", "Q2?", "Q3?"]}
+    assert service.last_suggestions_language == "pt"
+
+
+def test_suggestions_defaults_to_english(client):
+    c, service = client
+    assert c.get("/suggestions").status_code == 200
+    assert service.last_suggestions_language == "en"
+
+
+def test_suggestions_rejects_unknown_language(client):
+    c, _ = client
+    assert c.get("/suggestions", params={"language": "fr"}).status_code == 422

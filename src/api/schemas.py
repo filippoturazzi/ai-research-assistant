@@ -43,3 +43,7 @@ class UploadResult(BaseModel):
 
 class UploadResponse(BaseModel):
     results: list[UploadResult]
+
+
+class SuggestionsResponse(BaseModel):
+    questions: list[str]

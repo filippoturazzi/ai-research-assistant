@@ -1,10 +1,12 @@
 import threading
 import time
+from typing import Literal
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, UploadFile
 
-from api.schemas import AskRequest, AskResponse, FeedbackRequest, UploadResponse
+from api.schemas import (AskRequest, AskResponse, FeedbackRequest,
+                         SuggestionsResponse, UploadResponse)
 from rag.errors import DocumentNotFoundError, DownloadError, GenerationError
 
 
@@ -107,6 +109,12 @@ def create_app(service=None, rate_limit: int = 10, rate_window_s: int = 60) -> F
     @app.get("/documents")
     def documents():
         return svc().documents()
+
+    # Read-only and served from the service cache, so it stays out of the rate
+    # limit — a visitor should not spend an /ask slot on the chat's example pills.
+    @app.get("/suggestions", response_model=SuggestionsResponse)
+    def suggestions(language: Literal["en", "pt"] = "en"):
+        return SuggestionsResponse(questions=svc().suggested_questions(language))
 
     @app.get("/health")
     def health():
