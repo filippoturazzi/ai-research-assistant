@@ -66,6 +66,14 @@ TRANSLATIONS = {
         "en": "Add PDFs to the collection (select or drag several at once)",
         "pt": "Adicionar PDFs à coleção (selecione ou arraste vários de uma vez)",
     },
+    "session_scope_note": {
+        "en": "This knowledge base belongs to this browser tab and lasts while "
+              "it stays open. Other visitors have their own; reloading starts "
+              "over from the default collection.",
+        "pt": "Esta base é desta aba do navegador e vale enquanto ela estiver "
+              "aberta. Outros visitantes têm a sua; recarregar recomeça da "
+              "coleção padrão.",
+    },
     "index_button": {"en": "Index documents", "pt": "Indexar documentos"},
     "indexing": {
         "en": "Extracting, chunking and indexing...",

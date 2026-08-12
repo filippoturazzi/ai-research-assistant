@@ -8,6 +8,7 @@ from app.translations import current_language, t
 
 lang = current_language()
 hero(t("docs_hero_title", lang), t("docs_hero_sub", lang))
+st.caption(":material/info: " + t("session_scope_note", lang))
 
 for message in st.session_state.pop("docs_flash", []):
     if message.get("kind") == "error":
