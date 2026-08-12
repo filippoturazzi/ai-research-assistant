@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from rag.errors import (DocumentNotFoundError, DuplicateDocumentError,
-                        EmptyIndexError, GenerationError)
+                        EmptyIndexError, ExtractionError, GenerationError)
 from rag.feedback.db import FeedbackDB
 from rag.models import Chunk
 from rag.retrieval.store import IndexStore
@@ -263,3 +263,53 @@ def test_reset_documents_invalidates_suggestions_cache(suggest_service):
     assert svc.suggested_questions("en") == []
     assert svc.suggested_questions("en") == []
     assert len(fake.calls) == 1
+
+
+def _persist_service(tmp_path, persist):
+    store = IndexStore(dim=4)
+    db = FeedbackDB(":memory:")
+    svc = RAGService(store=store, embedder=FakeEmbedder(), reranker=FakeReranker(),
+                     chat=GroqChat(client=FakeGroq([])), db=db,
+                     index_dir=tmp_path / "index",
+                     documents_dir=tmp_path / "docs", persist=persist)
+    return svc, db
+
+
+def test_ephemeral_add_document_never_writes_the_index(tmp_path, sample_pdf):
+    svc, db = _persist_service(tmp_path, persist=False)
+    assert svc.add_document(sample_pdf.read_bytes(), "a.pdf") > 0
+    assert not (tmp_path / "index").exists()
+    db.close()
+
+
+def test_ephemeral_add_document_deletes_the_pdf_after_indexing(tmp_path, sample_pdf):
+    svc, db = _persist_service(tmp_path, persist=False)
+    svc.add_document(sample_pdf.read_bytes(), "a.pdf")
+    assert list((tmp_path / "docs").glob("*.pdf")) == []
+    db.close()
+
+
+def test_ephemeral_add_document_deletes_the_pdf_even_when_ingestion_fails(tmp_path):
+    svc, db = _persist_service(tmp_path, persist=False)
+    with pytest.raises(ExtractionError):
+        svc.add_document(b"not a pdf at all", "bad.pdf")
+    assert list((tmp_path / "docs").glob("*.pdf")) == []
+    db.close()
+
+
+def test_ephemeral_remove_and_reset_never_write_the_index(tmp_path, sample_pdf):
+    svc, db = _persist_service(tmp_path, persist=False)
+    svc.add_document(sample_pdf.read_bytes(), "a.pdf")
+    svc.add_document(sample_pdf.read_bytes(), "b.pdf")
+    svc.remove_document("a")
+    svc.reset_documents()
+    assert not (tmp_path / "index").exists()
+    db.close()
+
+
+def test_persisting_service_still_writes_the_index_and_keeps_the_pdf(tmp_path, sample_pdf):
+    svc, db = _persist_service(tmp_path, persist=True)
+    svc.add_document(sample_pdf.read_bytes(), "a.pdf")
+    assert (tmp_path / "index" / "chunks.json").exists()
+    assert (tmp_path / "docs" / "a.pdf").exists()
+    db.close()

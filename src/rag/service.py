@@ -38,13 +38,18 @@ class AskResult:
 
 class RAGService:
     def __init__(self, store: IndexStore, embedder: Embedder, reranker: Reranker,
-                 chat: GroqChat, db: FeedbackDB, index_dir: Path, documents_dir: Path):
+                 chat: GroqChat, db: FeedbackDB, index_dir: Path, documents_dir: Path,
+                 persist: bool = True):
         self.store = store
         self.embedder = embedder
         self.chat = chat
         self.db = db
         self.index_dir = index_dir
         self.documents_dir = documents_dir
+        # An ephemeral service (persist=False) is scoped to one visitor's
+        # session: it must never write to the shared index on disk, which is
+        # the read-only template every session is loaded from.
+        self.persist = persist
         self.retriever = HybridRetriever(store, embedder, reranker)
         # (base fingerprint, {language: questions}) — a new fingerprint drops the
         # whole language map, so the cache only ever holds the current base.
@@ -54,6 +59,10 @@ class RAGService:
         # concurrent Groq calls. Hits are sub-millisecond, so serializing
         # them costs nothing.
         self._suggestions_lock = threading.Lock()
+
+    def _save(self) -> None:
+        if self.persist:
+            self.store.save(self.index_dir)
 
     def ask(self, question: str, history: list[dict] | None = None,
             language: str = "en") -> AskResult:
@@ -86,8 +95,14 @@ class RAGService:
             raise DuplicateDocumentError(f"Document '{Path(safe_name).stem}' is already indexed.")
         path = self.documents_dir / safe_name
         path.write_bytes(pdf_bytes)
-        added = ingest_pdf(path, self.store, self.embedder)
-        self.store.save(self.index_dir)
+        try:
+            added = ingest_pdf(path, self.store, self.embedder)
+        finally:
+            if not self.persist:
+                # ingest_pdf needs a file on disk, but once the chunks are in
+                # memory the PDF has no further use in an ephemeral session.
+                path.unlink(missing_ok=True)
+        self._save()
         return added
 
     def add_documents(self, files: list[tuple[str, bytes]]) -> list[dict]:
@@ -110,7 +125,7 @@ class RAGService:
         pdf = self.documents_dir / f"{Path(doc_id).name}.pdf"
         if pdf.exists():
             pdf.unlink()
-        self.store.save(self.index_dir)
+        self._save()
         return removed
 
     def reset_documents(self) -> int:
@@ -119,7 +134,7 @@ class RAGService:
         if self.documents_dir.exists():
             for pdf in self.documents_dir.glob("*.pdf"):
                 pdf.unlink()
-        self.store.save(self.index_dir)
+        self._save()
         return removed
 
     def restore_default_documents(self, fetch=None) -> dict:
