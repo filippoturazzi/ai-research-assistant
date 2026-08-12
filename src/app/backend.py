@@ -221,7 +221,13 @@ else:
         with _suggestions_cache_lock:
             if key in _suggestions_cache:
                 return _suggestions_cache[key]
-        result = service.suggested_questions(language)
-        with _suggestions_cache_lock:
-            _suggestions_cache[key] = result
-        return result
+        result = service.suggested_questions_full(language)
+        # Same rule as RAGService's own cache: only a trustworthy result (from
+        # the LLM, or empty because the base has nothing to generate from) may
+        # be pinned here. A degraded fallback is returned to this caller but
+        # left out, so the next visitor's request retries the LLM instead of
+        # sharing the fallback with every session on this base.
+        if result.from_llm or not result.questions:
+            with _suggestions_cache_lock:
+                _suggestions_cache[key] = result.questions
+        return result.questions

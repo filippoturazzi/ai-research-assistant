@@ -58,6 +58,11 @@ class FakeService:
         self.last_suggestions_language = language
         return ["Q1?", "Q2?", "Q3?"]
 
+    def suggested_questions_full(self, language="en"):
+        from rag.generation.suggestions import Suggestions
+        self.last_suggestions_language = language
+        return Suggestions(questions=["Q1?", "Q2?", "Q3?"], from_llm=True)
+
     def _base_fingerprint(self):
         return "fp"
 
@@ -322,16 +327,17 @@ def test_restore_defaults_rebuilds_from_disk_without_downloading(session_backend
 
 
 def test_suggestions_shared_across_sessions_with_same_base(session_backend, monkeypatch):
+    from rag.generation.suggestions import Suggestions
     from rag.service import RAGService
 
     monkeypatch.setattr(session_backend, "_ensure_fresh_rag", lambda: "v1")
     calls = []
 
-    def fake_suggested_questions(self, language="en"):
+    def fake_suggested_questions_full(self, language="en"):
         calls.append(language)
-        return ["Q1?", "Q2?"]
+        return Suggestions(questions=["Q1?", "Q2?"], from_llm=True)
 
-    monkeypatch.setattr(RAGService, "suggested_questions", fake_suggested_questions)
+    monkeypatch.setattr(RAGService, "suggested_questions_full", fake_suggested_questions_full)
 
     tab_a, tab_b = {}, {}
     monkeypatch.setattr(session_backend, "_session_cache", lambda: tab_a)
@@ -348,17 +354,18 @@ def test_suggestions_shared_across_sessions_with_same_base(session_backend, monk
 
 
 def test_suggestions_get_own_entry_when_base_differs(session_backend, monkeypatch):
+    from rag.generation.suggestions import Suggestions
     from rag.service import RAGService
 
     monkeypatch.setattr(session_backend, "_ensure_fresh_rag", lambda: "v1")
     calls = []
 
-    def fake_suggested_questions(self, language="en"):
+    def fake_suggested_questions_full(self, language="en"):
         fingerprint = self._base_fingerprint()
         calls.append(fingerprint)
-        return [f"Q-{fingerprint}"]
+        return Suggestions(questions=[f"Q-{fingerprint}"], from_llm=True)
 
-    monkeypatch.setattr(RAGService, "suggested_questions", fake_suggested_questions)
+    monkeypatch.setattr(RAGService, "suggested_questions_full", fake_suggested_questions_full)
 
     tab_a, tab_b = {}, {}
     monkeypatch.setattr(session_backend, "_session_cache", lambda: tab_a)
@@ -371,6 +378,35 @@ def test_suggestions_get_own_entry_when_base_differs(session_backend, monkeypatc
 
     assert first != second
     assert len(calls) == 2
+
+
+def test_suggestions_degraded_fallback_is_not_shared_across_sessions(session_backend,
+                                                                     monkeypatch):
+    from rag.generation.suggestions import Suggestions
+    from rag.service import RAGService
+
+    monkeypatch.setattr(session_backend, "_ensure_fresh_rag", lambda: "v1")
+    calls = []
+
+    def fake_suggested_questions_full(self, language="en"):
+        calls.append(language)
+        return Suggestions(questions=["Fallback?"], from_llm=False)
+
+    monkeypatch.setattr(RAGService, "suggested_questions_full", fake_suggested_questions_full)
+
+    tab_a, tab_b = {}, {}
+    monkeypatch.setattr(session_backend, "_session_cache", lambda: tab_a)
+    first = session_backend.suggestions("en")
+
+    monkeypatch.setattr(session_backend, "_session_cache", lambda: tab_b)
+    second = session_backend.suggestions("en")
+
+    assert first == ["Fallback?"]
+    assert second == ["Fallback?"]
+    # A degraded fallback (from_llm=False, non-empty) must not be pinned in
+    # the shared cache: both sessions reach the (stubbed) service instead of
+    # the second one being served the first session's fallback.
+    assert calls == ["en", "en"]
 
 
 def test_suggestions_cache_dropped_on_code_version_change(embedded_backend, monkeypatch):

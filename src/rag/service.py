@@ -12,7 +12,7 @@ from rag.feedback.db import FeedbackDB
 from rag.generation.generator import generate_answer
 from rag.generation.groq_chat import GroqChat
 from rag.generation.rewriter import rewrite_query
-from rag.generation.suggestions import suggest_questions
+from rag.generation.suggestions import Suggestions, suggest_questions
 from rag.ingestion.pipeline import ingest_pdf
 from rag.retrieval.embedder import Embedder
 from rag.retrieval.reranker import Reranker
@@ -51,9 +51,13 @@ class RAGService:
         # the read-only template every session is loaded from.
         self.persist = persist
         self.retriever = HybridRetriever(store, embedder, reranker)
-        # (base fingerprint, {language: questions}) — a new fingerprint drops the
-        # whole language map, so the cache only ever holds the current base.
-        self._suggestions_cache: tuple[str, dict[str, list[str]]] = ("", {})
+        # (base fingerprint, {language: Suggestions}) — a new fingerprint drops
+        # the whole language map, so the cache only ever holds the current
+        # base. Storing the full Suggestions (not just the questions) lets
+        # callers such as the embedded backend's process-wide cache see the
+        # from_llm flag too, so they can apply the same "don't cache a
+        # degraded fallback" rule instead of losing that information.
+        self._suggestions_cache: tuple[str, dict[str, Suggestions]] = ("", {})
         # Guards the whole suggested_questions body: a burst of concurrent
         # cache misses (e.g. right after a restart) must not fan out into
         # concurrent Groq calls. Hits are sub-millisecond, so serializing
@@ -164,7 +168,7 @@ class RAGService:
         counts = Counter(c.doc_id for c in self.store.chunks)
         return hashlib.md5(repr(sorted(counts.items())).encode()).hexdigest()
 
-    def suggested_questions(self, language: str = "en") -> list[str]:
+    def suggested_questions_full(self, language: str = "en") -> Suggestions:
         with self._suggestions_lock:
             fingerprint = self._base_fingerprint()
             cached_fingerprint, by_language = self._suggestions_cache
@@ -180,5 +184,8 @@ class RAGService:
             # next call retries the LLM instead of pinning the fallback in
             # place of real suggestions until a KB edit or restart.
             if result.from_llm or not result.questions:
-                by_language[language] = result.questions
-            return result.questions
+                by_language[language] = result
+            return result
+
+    def suggested_questions(self, language: str = "en") -> list[str]:
+        return self.suggested_questions_full(language).questions
