@@ -72,7 +72,7 @@ if not st.session_state.messages and question is None:
         try:
             examples = suggestions(lang)
         except ApiError:
-            examples = []  # decoração: sem sugestões, a página segue normal
+            examples = []  # decorative: no suggestions, the page still works
         if examples:
             st.pills(t("try_asking", lang), examples,
                      key="example_pills", on_change=_pick_example)
