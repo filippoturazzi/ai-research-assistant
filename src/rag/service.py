@@ -1,3 +1,4 @@
+import hashlib
 import time
 from collections import Counter
 from dataclasses import asdict, dataclass
@@ -10,6 +11,7 @@ from rag.feedback.db import FeedbackDB
 from rag.generation.generator import generate_answer
 from rag.generation.groq_chat import GroqChat
 from rag.generation.rewriter import rewrite_query
+from rag.generation.suggestions import suggest_questions
 from rag.ingestion.pipeline import ingest_pdf
 from rag.retrieval.embedder import Embedder
 from rag.retrieval.reranker import Reranker
@@ -43,6 +45,9 @@ class RAGService:
         self.index_dir = index_dir
         self.documents_dir = documents_dir
         self.retriever = HybridRetriever(store, embedder, reranker)
+        # (base fingerprint, {language: questions}) — a new fingerprint drops the
+        # whole language map, so the cache only ever holds the current base.
+        self._suggestions_cache: tuple[str, dict[str, list[str]]] = ("", {})
 
     def ask(self, question: str, history: list[dict] | None = None,
             language: str = "en") -> AskResult:
@@ -133,3 +138,18 @@ class RAGService:
         counts = Counter((c.doc_id, c.doc_title) for c in self.store.chunks)
         return [{"doc_id": doc_id, "doc_title": title, "chunks": n}
                 for (doc_id, title), n in sorted(counts.items())]
+
+    def _base_fingerprint(self) -> str:
+        counts = Counter(c.doc_id for c in self.store.chunks)
+        return hashlib.md5(repr(sorted(counts.items())).encode()).hexdigest()
+
+    def suggested_questions(self, language: str = "en") -> list[str]:
+        fingerprint = self._base_fingerprint()
+        cached_fingerprint, by_language = self._suggestions_cache
+        if cached_fingerprint != fingerprint:
+            by_language = {}
+            self._suggestions_cache = (fingerprint, by_language)
+        if language not in by_language:
+            by_language[language] = suggest_questions(self.chat, self.store.chunks,
+                                                      language)
+        return by_language[language]

@@ -156,3 +156,53 @@ def test_ask_portuguese_uses_pt_prompt(service):
     # the second Groq call is the generation; its system prompt must be the PT one
     generation_call = service.chat._client.calls[1]
     assert "Responda em português." in generation_call["messages"][0]["content"]
+
+
+@pytest.fixture
+def suggest_service(tmp_path):
+    store = IndexStore(dim=4)
+    chunks = [Chunk(chunk_id=f"{doc}:0", doc_id=doc, doc_title=f"Paper {doc.upper()}",
+                    page=1, position=0, text=f"texto do {doc}")
+              for doc in ("a", "b")]
+    store.add(chunks, np.eye(4, dtype="float32")[:2])
+    fake = FakeGroq(["Q1?\nQ2?\nQ3?", "R1?\nR2?\nR3?"])
+    db = FeedbackDB(":memory:")
+    svc = RAGService(store=store, embedder=FakeEmbedder(), reranker=FakeReranker(),
+                     chat=GroqChat(client=fake), db=db,
+                     index_dir=tmp_path / "index", documents_dir=tmp_path / "docs")
+    yield svc, fake
+    db.close()
+
+
+def test_suggested_questions_are_cached_for_an_unchanged_base(suggest_service):
+    svc, fake = suggest_service
+    assert svc.suggested_questions("en") == ["Q1?", "Q2?", "Q3?"]
+    assert svc.suggested_questions("en") == ["Q1?", "Q2?", "Q3?"]
+    assert len(fake.calls) == 1
+
+
+def test_suggested_questions_regenerate_after_the_base_changes(suggest_service):
+    svc, fake = suggest_service
+    assert svc.suggested_questions("en") == ["Q1?", "Q2?", "Q3?"]
+    svc.remove_document("b")
+    assert svc.suggested_questions("en") == ["R1?", "R2?", "R3?"]
+    assert len(fake.calls) == 2
+
+
+def test_suggested_questions_are_cached_per_language(suggest_service):
+    svc, fake = suggest_service
+    svc.suggested_questions("en")
+    svc.suggested_questions("pt")
+    svc.suggested_questions("en")
+    assert len(fake.calls) == 2
+
+
+def test_suggested_questions_on_an_empty_base(tmp_path):
+    fake = FakeGroq([])
+    db = FeedbackDB(":memory:")
+    svc = RAGService(store=IndexStore(dim=4), embedder=FakeEmbedder(),
+                     reranker=FakeReranker(), chat=GroqChat(client=fake), db=db,
+                     index_dir=tmp_path / "index", documents_dir=tmp_path / "docs")
+    assert svc.suggested_questions("en") == []
+    assert fake.calls == []
+    db.close()
