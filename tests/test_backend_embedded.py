@@ -58,6 +58,9 @@ class FakeService:
         self.last_suggestions_language = language
         return ["Q1?", "Q2?", "Q3?"]
 
+    def _base_fingerprint(self):
+        return "fp"
+
 
 @pytest.fixture
 def fake_service(embedded_backend, monkeypatch):
@@ -316,3 +319,68 @@ def test_restore_defaults_rebuilds_from_disk_without_downloading(session_backend
     assert session_backend.restore_defaults() == {"documents_added": 1,
                                                   "chunks_added": 1}
     assert [c.doc_id for c in session_backend._build_service().store.chunks] == ["d"]
+
+
+def test_suggestions_shared_across_sessions_with_same_base(session_backend, monkeypatch):
+    from rag.service import RAGService
+
+    monkeypatch.setattr(session_backend, "_ensure_fresh_rag", lambda: "v1")
+    calls = []
+
+    def fake_suggested_questions(self, language="en"):
+        calls.append(language)
+        return ["Q1?", "Q2?"]
+
+    monkeypatch.setattr(RAGService, "suggested_questions", fake_suggested_questions)
+
+    tab_a, tab_b = {}, {}
+    monkeypatch.setattr(session_backend, "_session_cache", lambda: tab_a)
+    first = session_backend.suggestions("en")
+
+    monkeypatch.setattr(session_backend, "_session_cache", lambda: tab_b)
+    second = session_backend.suggestions("en")
+
+    assert first == ["Q1?", "Q2?"]
+    assert second == ["Q1?", "Q2?"]
+    # Both sessions share one base fingerprint, so only the first call ever
+    # reaches the Groq-backed suggested_questions().
+    assert calls == ["en"]
+
+
+def test_suggestions_get_own_entry_when_base_differs(session_backend, monkeypatch):
+    from rag.service import RAGService
+
+    monkeypatch.setattr(session_backend, "_ensure_fresh_rag", lambda: "v1")
+    calls = []
+
+    def fake_suggested_questions(self, language="en"):
+        fingerprint = self._base_fingerprint()
+        calls.append(fingerprint)
+        return [f"Q-{fingerprint}"]
+
+    monkeypatch.setattr(RAGService, "suggested_questions", fake_suggested_questions)
+
+    tab_a, tab_b = {}, {}
+    monkeypatch.setattr(session_backend, "_session_cache", lambda: tab_a)
+    first = session_backend.suggestions("en")
+
+    monkeypatch.setattr(session_backend, "_session_cache", lambda: tab_b)
+    service_b = session_backend._build_service()
+    service_b.store.clear()  # session b's base now differs from session a's
+    second = session_backend.suggestions("en")
+
+    assert first != second
+    assert len(calls) == 2
+
+
+def test_suggestions_cache_dropped_on_code_version_change(embedded_backend, monkeypatch):
+    import sys
+
+    monkeypatch.setattr(embedded_backend.st.cache_resource, "clear",
+                        lambda: None, raising=False)
+    embedded_backend._suggestions_cache[("fp", "en")] = ["Q1?"]
+    monkeypatch.setattr(sys, "_rag_loaded_version", "outdated", raising=False)
+
+    embedded_backend._ensure_fresh_rag()
+
+    assert embedded_backend._suggestions_cache == {}

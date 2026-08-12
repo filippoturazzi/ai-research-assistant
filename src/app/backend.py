@@ -47,6 +47,16 @@ else:
     _hits: list[float] = []
     _hits_lock = threading.Lock()
 
+    # Process-wide, keyed on (base fingerprint, language): each session's
+    # RAGService starts with an empty suggestions cache, so without this the
+    # once-per-process Groq call from before per-session services became a
+    # once-per-refresh one. Sessions sharing a base fingerprint are entitled
+    # to share the answer; a session whose base differs gets its own entry.
+    # Dropped in _ensure_fresh_rag() alongside the other code-version-scoped
+    # caches.
+    _suggestions_cache: dict[tuple[str, str], list[str]] = {}
+    _suggestions_cache_lock = threading.Lock()
+
     def _check_rate() -> None:
         now = time.monotonic()
         with _hits_lock:
@@ -83,6 +93,8 @@ else:
             # also drop cached resources: any cached service was built from
             # the module generation just purged
             st.cache_resource.clear()
+            with _suggestions_cache_lock:
+                _suggestions_cache.clear()
             sys._rag_loaded_version = version
         return version
 
@@ -200,5 +212,16 @@ else:
         return _service_or_api_error().documents()
 
     def suggestions(language: str = "en") -> list:
-        # Not rate limited: read-only and answered from the service cache.
-        return _service_or_api_error().suggested_questions(language)
+        # Not rate limited: read-only, and the process-wide cache above keeps
+        # a visitor holding down refresh from generating unbounded Groq
+        # traffic — the per-session service's own cache can't, since it
+        # starts empty every session.
+        service = _service_or_api_error()
+        key = (service._base_fingerprint(), language)
+        with _suggestions_cache_lock:
+            if key in _suggestions_cache:
+                return _suggestions_cache[key]
+        result = service.suggested_questions(language)
+        with _suggestions_cache_lock:
+            _suggestions_cache[key] = result
+        return result

@@ -133,15 +133,18 @@ TRANSLATIONS = {
         "en": "How the assistant is performing, according to its users.",
         "pt": "Como o assistente está se saindo, segundo quem usa.",
     },
+    "metrics_scope_note": {
+        "en": "These statistics are aggregated across every visitor's session — "
+              "no individual question, answer, or document is shown here.",
+        "pt": "Essas estatísticas são agregadas entre as sessões de todos os "
+              "visitantes — nenhuma pergunta, resposta ou documento individual "
+              "é exibido aqui.",
+    },
     "m_questions": {"en": "Questions", "pt": "Perguntas"},
+    "m_feedback": {"en": "Feedback", "pt": "Feedback"},
     "m_approval": {"en": "Approval", "pt": "Aprovação"},
     "m_approval_7d": {"en": "Approval (7d)", "pt": "Aprovação (7d)"},
     "m_latency": {"en": "Avg latency", "pt": "Latência média"},
-    "negatives_title": {
-        "en": "Thumbs-down questions (investigation queue)",
-        "pt": "Perguntas com polegar para baixo (fila de investigação)",
-    },
-    "no_negatives": {"en": "No negative feedback.", "pt": "Nenhum feedback negativo."},
     "top_docs": {"en": "Most cited documents", "pt": "Documentos mais citados"},
     "citations": {"en": "citations", "pt": "citações"},
 }
