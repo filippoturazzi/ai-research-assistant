@@ -111,12 +111,13 @@ def test_embedded_upload_and_misc(embedded_backend, fake_service):
     assert embedded_backend.documents()[0]["doc_id"] == "d"
 
 
-def test_embedded_document_management(embedded_backend, fake_service):
+def test_embedded_document_management(embedded_backend, fake_service, monkeypatch):
     embedded_backend._hits.clear()
+    monkeypatch.setattr(embedded_backend, "_session_cache", lambda: {})
     assert embedded_backend.remove_document("d") == {"doc_id": "d", "chunks_removed": 2}
     assert embedded_backend.reset_documents() == {"chunks_removed": 5}
-    assert embedded_backend.restore_defaults() == {"documents_added": 5,
-                                                   "chunks_added": 42}
+    assert embedded_backend.restore_defaults() == {"documents_added": 1,
+                                                   "chunks_added": 3}
 
 
 def test_embedded_remove_missing_becomes_api_error(embedded_backend, fake_service):
@@ -135,7 +136,8 @@ def test_code_version_stable_until_source_changes(embedded_backend, tmp_path):
 
 def test_build_service_keys_cache_on_current_code_version(embedded_backend, monkeypatch):
     calls = []
-    monkeypatch.setattr(embedded_backend, "_cached_service",
+    monkeypatch.setattr(embedded_backend, "_session_cache", lambda: {})
+    monkeypatch.setattr(embedded_backend, "_new_session_service",
                         lambda version: calls.append(version) or "svc")
     assert embedded_backend._build_service() == "svc"
     assert calls == [embedded_backend._code_version()]
@@ -146,7 +148,8 @@ def test_build_service_purges_stale_rag_modules(embedded_backend, monkeypatch):
     import types
     sys.modules["rag._stale_probe"] = types.ModuleType("rag._stale_probe")
     monkeypatch.setattr(sys, "_rag_loaded_version", "outdated", raising=False)
-    monkeypatch.setattr(embedded_backend, "_cached_service", lambda version: "svc")
+    monkeypatch.setattr(embedded_backend, "_session_cache", lambda: {})
+    monkeypatch.setattr(embedded_backend, "_new_session_service", lambda version: "svc")
 
     embedded_backend._build_service()
 
@@ -185,7 +188,8 @@ def test_build_service_keeps_modules_when_version_current(embedded_backend, monk
     monkeypatch.setattr(sys, "_rag_loaded_version",
                         embedded_backend._code_version(), raising=False)
     sys.modules["rag._stale_probe"] = types.ModuleType("rag._stale_probe")
-    monkeypatch.setattr(embedded_backend, "_cached_service", lambda version: "svc")
+    monkeypatch.setattr(embedded_backend, "_session_cache", lambda: {})
+    monkeypatch.setattr(embedded_backend, "_new_session_service", lambda version: "svc")
 
     embedded_backend._build_service()
 
@@ -225,3 +229,90 @@ def test_http_mode_exports_suggestions(monkeypatch):
     importlib.reload(backend)
     import app.api_client as api_client
     assert backend.suggestions is api_client.suggestions
+
+
+class _Nothing:
+    """Stand-in for the shared, stateless resources — never called in these tests."""
+
+
+@pytest.fixture
+def session_backend(embedded_backend, monkeypatch, tmp_path):
+    import numpy as np
+
+    from rag.models import Chunk
+    from rag.retrieval.store import IndexStore
+
+    index_dir = tmp_path / "index"
+    store = IndexStore(dim=4)
+    store.add([Chunk(chunk_id="d:0", doc_id="d", doc_title="Doc D", page=1,
+                     position=0, text="texto")], np.eye(4, dtype="float32")[:1])
+    store.save(index_dir)
+    monkeypatch.setattr("rag.config.INDEX_DIR", index_dir)
+    monkeypatch.setattr(embedded_backend, "_shared_resources",
+                        lambda code_version: {"embedder": _Nothing(),
+                                              "reranker": _Nothing(),
+                                              "chat": _Nothing(), "db": _Nothing()})
+    return embedded_backend
+
+
+def test_each_session_gets_its_own_store(session_backend):
+    first = session_backend._new_session_service("v1")
+    second = session_backend._new_session_service("v1")
+    assert first.store is not second.store
+    assert first.documents_dir != second.documents_dir
+    assert [c.doc_id for c in first.store.chunks] == ["d"]
+    assert [c.doc_id for c in second.store.chunks] == ["d"]
+
+
+def test_the_session_service_is_ephemeral(session_backend):
+    assert session_backend._new_session_service("v1").persist is False
+
+
+def test_two_sessions_do_not_see_each_other(session_backend, monkeypatch):
+    monkeypatch.setattr(session_backend, "_ensure_fresh_rag", lambda: "v1")
+    tab_a, tab_b = {}, {}
+
+    monkeypatch.setattr(session_backend, "_session_cache", lambda: tab_a)
+    service_a = session_backend._build_service()
+    service_a.store.clear()
+
+    monkeypatch.setattr(session_backend, "_session_cache", lambda: tab_b)
+    service_b = session_backend._build_service()
+
+    assert service_a is not service_b
+    assert service_a.store.chunks == []
+    assert [c.doc_id for c in service_b.store.chunks] == ["d"]
+
+
+def test_the_same_session_reuses_its_service(session_backend, monkeypatch):
+    monkeypatch.setattr(session_backend, "_ensure_fresh_rag", lambda: "v1")
+    tab = {}
+    monkeypatch.setattr(session_backend, "_session_cache", lambda: tab)
+    assert session_backend._build_service() is session_backend._build_service()
+
+
+def test_a_new_code_version_rebuilds_the_session_service(session_backend, monkeypatch):
+    tab = {}
+    monkeypatch.setattr(session_backend, "_session_cache", lambda: tab)
+    monkeypatch.setattr(session_backend, "_ensure_fresh_rag", lambda: "v1")
+    first = session_backend._build_service()
+    monkeypatch.setattr(session_backend, "_ensure_fresh_rag", lambda: "v2")
+    assert session_backend._build_service() is not first
+
+
+def test_restore_defaults_rebuilds_from_disk_without_downloading(session_backend,
+                                                                monkeypatch):
+    monkeypatch.setattr(session_backend, "_ensure_fresh_rag", lambda: "v1")
+    tab = {}
+    monkeypatch.setattr(session_backend, "_session_cache", lambda: tab)
+    session_backend._hits.clear()
+    session_backend._build_service().store.clear()
+
+    def _no_download(*args, **kwargs):
+        raise AssertionError("restore_defaults must not hit the network")
+
+    monkeypatch.setattr("rag.ingestion.default_papers.fetch_default_papers",
+                        _no_download)
+    assert session_backend.restore_defaults() == {"documents_added": 1,
+                                                  "chunks_added": 1}
+    assert [c.doc_id for c in session_backend._build_service().store.chunks] == ["d"]

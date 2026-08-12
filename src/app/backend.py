@@ -26,6 +26,7 @@ else:
     import streamlit as st
     import hashlib
     import sys
+    import tempfile
     import threading
     import time
     from dataclasses import asdict
@@ -38,6 +39,8 @@ else:
     # folder), so any rag classes bound at import time could belong to a
     # previous deploy. rag is imported inside functions, always after
     # _ensure_fresh_rag() has synced sys.modules with the code on disk.
+
+    _SESSION_KEY = "rag_session_service"
 
     _RATE_LIMIT = 10
     _RATE_WINDOW_S = 60
@@ -83,25 +86,56 @@ else:
             sys._rag_loaded_version = version
         return version
 
+    def _session_cache() -> dict:
+        # Indirection over st.session_state: outside a Streamlit runtime it
+        # still works but is process-global, so the tests swap this for a
+        # plain dict — one dict per simulated tab is what makes the isolation
+        # testable at all.
+        return st.session_state
+
     # code_version (not "version"): the rename shifts this function's cache
     # hash, orphaning entries a pre-purge deploy built from stale modules
-    @st.cache_resource(show_spinner="Loading models and index (first visit only)...")
-    def _cached_service(code_version: str):
+    @st.cache_resource(show_spinner="Loading models (first visit only)...")
+    def _shared_resources(code_version: str) -> dict:
+        # Only the expensive, stateless pieces are shared across visitors.
+        # The index is not: it is what each visitor changes.
         _bridge_secrets()
-        from rag.config import DB_PATH, DOCUMENTS_DIR, INDEX_DIR
+        from rag.config import DB_PATH
         from rag.feedback.db import FeedbackDB
         from rag.generation.groq_chat import GroqChat
         from rag.retrieval.embedder import Embedder
         from rag.retrieval.reranker import Reranker
+
+        return {"embedder": Embedder(), "reranker": Reranker(),
+                "chat": GroqChat(), "db": FeedbackDB(DB_PATH)}
+
+    def _new_session_service(version: str):
+        from rag.config import INDEX_DIR
         from rag.retrieval.store import IndexStore
         from rag.service import RAGService
 
-        return RAGService(store=IndexStore.load(INDEX_DIR), embedder=Embedder(),
-                          reranker=Reranker(), chat=GroqChat(), db=FeedbackDB(DB_PATH),
-                          index_dir=INDEX_DIR, documents_dir=DOCUMENTS_DIR)
+        shared = _shared_resources(version)
+        # A per-session temp dir keeps two visitors uploading the same file
+        # name from colliding; add_document deletes the PDF right after
+        # indexing, so the directory stays empty.
+        return RAGService(store=IndexStore.load(INDEX_DIR),
+                          embedder=shared["embedder"], reranker=shared["reranker"],
+                          chat=shared["chat"], db=shared["db"],
+                          index_dir=INDEX_DIR,
+                          documents_dir=Path(tempfile.mkdtemp(prefix="rag-session-")),
+                          persist=False)
 
     def _build_service():
-        return _cached_service(_ensure_fresh_rag())
+        version = _ensure_fresh_rag()
+        cache = _session_cache()
+        # (version, service): a session service survives cache_resource.clear(),
+        # so without the version check it would keep classes from a generation
+        # of the rag package that _ensure_fresh_rag already purged.
+        entry = cache.get(_SESSION_KEY)
+        if entry is None or entry[0] != version:
+            entry = (version, _new_session_service(version))
+            cache[_SESSION_KEY] = entry
+        return entry[1]
 
     def _service_or_api_error():
         _ensure_fresh_rag()
@@ -145,13 +179,15 @@ else:
 
     def restore_defaults() -> dict:
         _check_rate()
-        service = _service_or_api_error()
-        from rag.errors import (DownloadError, DuplicateDocumentError,
-                                ExtractionError)
-        try:
-            return service.restore_default_documents()
-        except (DownloadError, DuplicateDocumentError, ExtractionError) as exc:
-            raise ApiError(str(exc)) from exc
+        _ensure_fresh_rag()
+        # An ephemeral session restores by starting over from the read-only
+        # index on disk: instant, and no arXiv round trip.
+        cache = _session_cache()
+        if _SESSION_KEY in cache:
+            del cache[_SESSION_KEY]
+        docs = _service_or_api_error().documents()
+        return {"documents_added": len(docs),
+                "chunks_added": sum(d["chunks"] for d in docs)}
 
     def send_feedback(interaction_id: int, rating: int) -> dict:
         _service_or_api_error().feedback(interaction_id, rating)
