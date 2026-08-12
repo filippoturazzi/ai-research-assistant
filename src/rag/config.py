@@ -10,6 +10,7 @@ EMBEDDING_DIM = 384
 RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 GENERATION_MODEL = "llama-3.3-70b-versatile"
 REWRITE_MODEL = "llama-3.1-8b-instant"
+SUGGESTION_MODEL = "llama-3.1-8b-instant"
 
 CHUNK_WORDS = 600      # ~800 tokens
 OVERLAP_WORDS = 80    # ~150 tokens
