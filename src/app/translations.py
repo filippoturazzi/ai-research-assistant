@@ -28,12 +28,6 @@ TRANSLATIONS = {
     "step3_text": {"en": "Thumbs help measure answer quality",
                    "pt": "O polegar ajuda a medir a qualidade"},
     "try_asking": {"en": "Try asking:", "pt": "Experimente perguntar:"},
-    "example_q1": {"en": "What is the attention mechanism?",
-                   "pt": "O que é o mecanismo de atenção?"},
-    "example_q2": {"en": "How does retrieval reduce hallucination?",
-                   "pt": "Como a recuperação reduz alucinação?"},
-    "example_q3": {"en": "What does BERT do differently from GPT-3?",
-                   "pt": "O que o BERT faz de diferente do GPT-3?"},
     "empty_base_title": {"en": "Start here", "pt": "Comece aqui"},
     "empty_base_text": {
         "en": "The knowledge base is empty. Upload your PDFs or restore the "

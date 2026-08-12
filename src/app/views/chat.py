@@ -1,6 +1,7 @@
 import streamlit as st
 
-from app.backend import ApiConnectionError, ApiError, ask, documents, send_feedback
+from app.backend import (ApiConnectionError, ApiError, ask, documents,
+                         send_feedback, suggestions)
 from app.theme import hero, step_cards
 from app.translations import current_language, t
 
@@ -68,9 +69,13 @@ if not st.session_state.messages and question is None:
             st.page_link("views/documents.py", label=t("go_to_documents", lang),
                          icon=":material/upload_file:")
     else:
-        st.pills(t("try_asking", lang),
-                 [t("example_q1", lang), t("example_q2", lang), t("example_q3", lang)],
-                 key="example_pills", on_change=_pick_example)
+        try:
+            examples = suggestions(lang)
+        except ApiError:
+            examples = []  # decoração: sem sugestões, a página segue normal
+        if examples:
+            st.pills(t("try_asking", lang), examples,
+                     key="example_pills", on_change=_pick_example)
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
