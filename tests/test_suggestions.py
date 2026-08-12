@@ -25,42 +25,48 @@ def _broken_chat(monkeypatch):
 
 def test_returns_questions_from_the_llm():
     chat = GroqChat(client=FakeGroq(["Q1?\nQ2?\nQ3?"]))
-    assert suggest_questions(chat, _chunks(("d", "Doc D"))) == ["Q1?", "Q2?", "Q3?"]
+    out = suggest_questions(chat, _chunks(("d", "Doc D")))
+    assert out.questions == ["Q1?", "Q2?", "Q3?"]
+    assert out.from_llm is True
 
 
 def test_strips_numbering_bullets_and_quotes():
     chat = GroqChat(client=FakeGroq(['1. "Q1?"\n- Q2?\n3) Q3?\n\n']))
-    assert suggest_questions(chat, _chunks(("d", "Doc D"))) == ["Q1?", "Q2?", "Q3?"]
+    assert suggest_questions(chat, _chunks(("d", "Doc D"))).questions == ["Q1?", "Q2?", "Q3?"]
 
 
 def test_caps_at_n():
     chat = GroqChat(client=FakeGroq(["Q1?\nQ2?\nQ3?\nQ4?"]))
-    assert suggest_questions(chat, _chunks(("d", "Doc D"))) == ["Q1?", "Q2?", "Q3?"]
+    assert suggest_questions(chat, _chunks(("d", "Doc D"))).questions == ["Q1?", "Q2?", "Q3?"]
 
 
 def test_empty_base_returns_empty_without_calling_the_llm():
     fake = FakeGroq([])
-    assert suggest_questions(GroqChat(client=fake), []) == []
+    out = suggest_questions(GroqChat(client=fake), [])
+    assert out.questions == []
+    assert out.from_llm is False
     assert fake.calls == []
 
 
 def test_generation_error_falls_back_to_titles(monkeypatch):
     out = suggest_questions(_broken_chat(monkeypatch),
                             _chunks(("a", "Paper A"), ("b", "Paper B")))
-    assert len(out) == 3
-    assert all("Paper A" in q or "Paper B" in q for q in out)
+    assert len(out.questions) == 3
+    assert all("Paper A" in q or "Paper B" in q for q in out.questions)
+    assert out.from_llm is False
 
 
 def test_short_output_falls_back():
     chat = GroqChat(client=FakeGroq(["Q1?\n\n"]))
     out = suggest_questions(chat, _chunks(("a", "Paper A")))
-    assert len(out) == 3
-    assert all("Paper A" in q for q in out)
+    assert len(out.questions) == 3
+    assert all("Paper A" in q for q in out.questions)
+    assert out.from_llm is False
 
 
 def test_fallback_covers_n_with_a_single_document(monkeypatch):
     out = suggest_questions(_broken_chat(monkeypatch), _chunks(("a", "Paper A")))
-    assert len(out) == len(set(out)) == 3
+    assert len(out.questions) == len(set(out.questions)) == 3
 
 
 def test_prompt_samples_first_chunk_of_at_most_five_documents():
@@ -83,4 +89,24 @@ def test_uses_the_suggestion_model():
 def test_portuguese_fallback_uses_portuguese_templates(monkeypatch):
     out = suggest_questions(_broken_chat(monkeypatch), _chunks(("a", "Paper A")),
                             language="pt")
-    assert out[0] == "O que o Paper A propõe?"
+    assert out.questions[0] == "O que o Paper A propõe?"
+
+
+def test_preamble_line_is_rejected_and_falls_back():
+    # A preamble like "Here are three questions:" doesn't end with "?", so it's
+    # dropped by _parse. That leaves only 2 valid questions for n=3, so the
+    # whole result falls back to the deterministic titles instead of letting
+    # the preamble sneak in as a pill.
+    chat = GroqChat(client=FakeGroq(["Here are three questions:\nQ1?\nQ2?"]))
+    out = suggest_questions(chat, _chunks(("a", "Paper A")))
+    assert out.from_llm is False
+    assert len(out.questions) == 3
+    assert all("Paper A" in q for q in out.questions)
+
+
+def test_overlong_line_is_rejected_and_falls_back():
+    long_question = "Q " + ("x" * 130) + "?"
+    chat = GroqChat(client=FakeGroq([f"Q1?\n{long_question}\nQ3?"]))
+    out = suggest_questions(chat, _chunks(("a", "Paper A")))
+    assert out.from_llm is False
+    assert len(out.questions) == 3

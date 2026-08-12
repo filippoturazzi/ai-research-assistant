@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from rag.errors import (DocumentNotFoundError, DuplicateDocumentError,
-                        EmptyIndexError)
+                        EmptyIndexError, GenerationError)
 from rag.feedback.db import FeedbackDB
 from rag.models import Chunk
 from rag.retrieval.store import IndexStore
@@ -206,3 +206,60 @@ def test_suggested_questions_on_an_empty_base(tmp_path):
     assert svc.suggested_questions("en") == []
     assert fake.calls == []
     db.close()
+
+
+def test_suggested_questions_fallback_result_is_not_cached(tmp_path, monkeypatch):
+    # A fallback (e.g. from a Groq 429 on the first call) must not get pinned
+    # in the cache in place of real suggestions — the next call should retry
+    # the LLM. An LLM-backed result, by contrast, IS cached (already covered
+    # by test_suggested_questions_are_cached_for_an_unchanged_base above).
+    store = IndexStore(dim=4)
+    chunks = [Chunk(chunk_id="a:0", doc_id="a", doc_title="Paper A", page=1,
+                    position=0, text="texto do a")]
+    store.add(chunks, np.eye(4, dtype="float32")[:1])
+    chat = GroqChat(client=FakeGroq([]))
+    db = FeedbackDB(":memory:")
+    svc = RAGService(store=store, embedder=FakeEmbedder(), reranker=FakeReranker(),
+                     chat=chat, db=db, index_dir=tmp_path / "index",
+                     documents_dir=tmp_path / "docs")
+
+    calls = {"n": 0}
+
+    def flaky_complete(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise GenerationError("down")
+        return "Q1?\nQ2?\nQ3?"
+
+    monkeypatch.setattr(chat, "complete", flaky_complete)
+
+    first = svc.suggested_questions("en")
+    assert len(first) == 3 and "Paper A" in first[0]  # deterministic fallback
+
+    second = svc.suggested_questions("en")
+    assert second == ["Q1?", "Q2?", "Q3?"]
+    assert calls["n"] == 2  # both calls reached the LLM — the fallback wasn't cached
+    db.close()
+
+
+def test_add_document_invalidates_suggestions_cache(suggest_service, sample_pdf):
+    svc, fake = suggest_service
+    assert svc.suggested_questions("en") == ["Q1?", "Q2?", "Q3?"]
+
+    svc.add_document(sample_pdf.read_bytes(), "novo_paper.pdf")
+
+    assert svc.suggested_questions("en") == ["R1?", "R2?", "R3?"]
+    assert len(fake.calls) == 2
+
+
+def test_reset_documents_invalidates_suggestions_cache(suggest_service):
+    svc, fake = suggest_service
+    assert svc.suggested_questions("en") == ["Q1?", "Q2?", "Q3?"]
+
+    svc.reset_documents()
+
+    # An emptied base has nothing to sample, so suggestions come back empty
+    # without a second LLM call, and that empty result is itself cached.
+    assert svc.suggested_questions("en") == []
+    assert svc.suggested_questions("en") == []
+    assert len(fake.calls) == 1

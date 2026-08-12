@@ -1,4 +1,5 @@
 import hashlib
+import threading
 import time
 from collections import Counter
 from dataclasses import asdict, dataclass
@@ -48,6 +49,11 @@ class RAGService:
         # (base fingerprint, {language: questions}) — a new fingerprint drops the
         # whole language map, so the cache only ever holds the current base.
         self._suggestions_cache: tuple[str, dict[str, list[str]]] = ("", {})
+        # Guards the whole suggested_questions body: a burst of concurrent
+        # cache misses (e.g. right after a restart) must not fan out into
+        # concurrent Groq calls. Hits are sub-millisecond, so serializing
+        # them costs nothing.
+        self._suggestions_lock = threading.Lock()
 
     def ask(self, question: str, history: list[dict] | None = None,
             language: str = "en") -> AskResult:
@@ -144,12 +150,20 @@ class RAGService:
         return hashlib.md5(repr(sorted(counts.items())).encode()).hexdigest()
 
     def suggested_questions(self, language: str = "en") -> list[str]:
-        fingerprint = self._base_fingerprint()
-        cached_fingerprint, by_language = self._suggestions_cache
-        if cached_fingerprint != fingerprint:
-            by_language = {}
-            self._suggestions_cache = (fingerprint, by_language)
-        if language not in by_language:
-            by_language[language] = suggest_questions(self.chat, self.store.chunks,
-                                                      language)
-        return by_language[language]
+        with self._suggestions_lock:
+            fingerprint = self._base_fingerprint()
+            cached_fingerprint, by_language = self._suggestions_cache
+            if cached_fingerprint != fingerprint:
+                by_language = {}
+                self._suggestions_cache = (fingerprint, by_language)
+            if language in by_language:
+                return by_language[language]
+            result = suggest_questions(self.chat, self.store.chunks, language)
+            # Only cache trustworthy results: a clean LLM parse, or an empty
+            # base (nothing to generate from, so [] is correct and free to
+            # cache). A degraded fallback is returned but not cached, so the
+            # next call retries the LLM instead of pinning the fallback in
+            # place of real suggestions until a KB edit or restart.
+            if result.from_llm or not result.questions:
+                by_language[language] = result.questions
+            return result.questions

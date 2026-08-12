@@ -1,4 +1,5 @@
 import re
+from dataclasses import dataclass
 
 from rag.config import SUGGESTION_MODEL
 from rag.errors import GenerationError
@@ -7,6 +8,13 @@ from rag.models import Chunk
 
 _MAX_DOCS = 5
 _EXCERPT_CHARS = 600
+
+
+@dataclass
+class Suggestions:
+    questions: list[str]
+    from_llm: bool
+
 
 _SYSTEMS = {
     "en": (
@@ -58,7 +66,7 @@ def _clean(line: str) -> str:
 
 def _parse(raw: str, n: int) -> list[str]:
     questions = [_clean(line) for line in raw.splitlines()]
-    return [q for q in questions if q][:n]
+    return [q for q in questions if q.endswith("?") and len(q) <= 120][:n]
 
 
 def _fallback(sample: list[Chunk], language: str, n: int) -> list[str]:
@@ -69,10 +77,10 @@ def _fallback(sample: list[Chunk], language: str, n: int) -> list[str]:
 
 
 def suggest_questions(chat: GroqChat, chunks: list[Chunk],
-                      language: str = "en", n: int = 3) -> list[str]:
+                      language: str = "en", n: int = 3) -> Suggestions:
     sample = _sample(chunks)
     if not sample:
-        return []
+        return Suggestions(questions=[], from_llm=False)
     excerpts = "\n\n---\n\n".join(
         f"({c.doc_title})\n{c.text[:_EXCERPT_CHARS]}" for c in sample)
     messages = [
@@ -83,6 +91,8 @@ def suggest_questions(chat: GroqChat, chunks: list[Chunk],
         raw = chat.complete(SUGGESTION_MODEL, messages, max_tokens=200,
                             temperature=0.5)
     except GenerationError:
-        return _fallback(sample, language, n)
+        return Suggestions(questions=_fallback(sample, language, n), from_llm=False)
     questions = _parse(raw, n)
-    return questions if len(questions) == n else _fallback(sample, language, n)
+    if len(questions) == n:
+        return Suggestions(questions=questions, from_llm=True)
+    return Suggestions(questions=_fallback(sample, language, n), from_llm=False)
