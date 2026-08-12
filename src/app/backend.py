@@ -20,7 +20,8 @@ def _mode() -> str:
 if _mode() != "embedded":
     from app.api_client import (ApiConnectionError, ApiError, ask, documents,
                                 metrics, remove_document, reset_documents,
-                                restore_defaults, send_feedback, upload)
+                                restore_defaults, send_feedback, suggestions,
+                                upload)
 else:
     import streamlit as st
     import hashlib
@@ -161,3 +162,7 @@ else:
 
     def documents() -> list:
         return _service_or_api_error().documents()
+
+    def suggestions(language: str = "en") -> list:
+        # Not rate limited: read-only and answered from the service cache.
+        return _service_or_api_error().suggested_questions(language)

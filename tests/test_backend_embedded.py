@@ -54,6 +54,10 @@ class FakeService:
     def documents(self):
         return [{"doc_id": "d", "doc_title": "D", "chunks": 3}]
 
+    def suggested_questions(self, language="en"):
+        self.last_suggestions_language = language
+        return ["Q1?", "Q2?", "Q3?"]
+
 
 @pytest.fixture
 def fake_service(embedded_backend, monkeypatch):
@@ -200,3 +204,24 @@ def test_embedded_service_build_failure_becomes_api_error(embedded_backend, monk
         embedded_backend.metrics()
     with pytest.raises(embedded_backend.ApiError):
         embedded_backend.documents()
+
+
+def test_embedded_suggestions(embedded_backend, fake_service):
+    assert embedded_backend.suggestions("pt") == ["Q1?", "Q2?", "Q3?"]
+    assert fake_service.last_suggestions_language == "pt"
+
+
+def test_embedded_suggestions_ignore_the_rate_limit(embedded_backend, fake_service,
+                                                    monkeypatch):
+    monkeypatch.setattr(embedded_backend, "_RATE_LIMIT", 1)
+    embedded_backend._hits.clear()
+    for _ in range(3):
+        assert embedded_backend.suggestions("en") == ["Q1?", "Q2?", "Q3?"]
+
+
+def test_http_mode_exports_suggestions(monkeypatch):
+    monkeypatch.delenv("BACKEND_MODE", raising=False)
+    import app.backend as backend
+    importlib.reload(backend)
+    import app.api_client as api_client
+    assert backend.suggestions is api_client.suggestions

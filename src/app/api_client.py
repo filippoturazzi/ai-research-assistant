@@ -70,3 +70,8 @@ def metrics() -> dict:
 
 def documents() -> list:
     return _request("GET", f"{API_URL}/documents")
+
+
+def suggestions(language: str = "en") -> list:
+    return _request("GET", f"{API_URL}/suggestions",
+                    params={"language": language})["questions"]
