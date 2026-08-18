@@ -10,4 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping the app
-        run: curl -sS --max-time 120 -o /dev/null -w "HTTP %{http_code}\n" https://ai-research-assistant-turazzi.streamlit.app
+        run: |
+          curl -sSL -c /tmp/cookies.txt -b /tmp/cookies.txt --max-time 120 \
+            -o /dev/null -w "HTTP %{http_code} (%{num_redirects} redirects)\n" \
+            https://ai-research-assistant-turazzi.streamlit.app
