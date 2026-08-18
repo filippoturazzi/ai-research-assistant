@@ -7,8 +7,8 @@ to demonstrate advanced RAG techniques:
 
 - **Hybrid search** — FAISS (semantic) + BM25 (lexical) merged with **Reciprocal Rank Fusion**
 - **Re-ranking** with a cross-encoder (`ms-marco-MiniLM-L-6-v2`)
-- **History-aware query rewriting** (Groq, Llama 3.1 8B)
-- **Grounded answers with `[n]` citations** (Groq, Llama 3.3 70B)
+- **History-aware query rewriting** (Groq, `openai/gpt-oss-20b`)
+- **Grounded answers with `[n]` citations** (Groq, `openai/gpt-oss-120b`)
 - **👍/👎 feedback** persisted in SQLite + a metrics dashboard
 - Incremental PDF upload
 - **Bilingual UI** — English by default, with a Português option that switches
